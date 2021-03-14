@@ -12,6 +12,8 @@ NOTE: Currently only adapted for 8.0.0
 * `rustup update`
 * `rustup default nightly`
 * `cargo install cargo-xbuild`
+* `cargo install cargo-binutils`
+* `rustup component add llvm-tools-preview`
 * `rustup component add rust-src`
 * `build.sh`
 

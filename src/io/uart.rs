@@ -266,10 +266,7 @@ impl UARTDevice
     pub fn writeStr(&mut self, data: &str)
     {
         for byte in data.bytes() {
-            loop
-            {
-                if (!self.UART_LSR.bits_set(UART_TX_FIFO_FULL)) { break; }
-            }
+            while (self.UART_LSR.bits_set(UART_TX_FIFO_FULL)) {}
 
             self.UART_THR_DLAB.write(byte as u32);
         }

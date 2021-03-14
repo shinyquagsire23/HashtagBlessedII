@@ -62,46 +62,39 @@ impl CarDeviceInfo
     pub fn enable(&self) {
 
         self.disable();
-
-        let rst_dev_reg: *mut u32 = (CAR_VADDR + self.rst_dev_offset) as _;
-        let clk_enb_reg: *mut u32 = (CAR_VADDR + self.clk_out_enb_offset) as _;
-        let clk_src_reg: *mut u32 = (CAR_VADDR + self.clk_source_offset) as _;
+        
+        let rst_dev_reg: u32 = (CAR_VADDR + self.rst_dev_offset);
+        let clk_enb_reg: u32 = (CAR_VADDR + self.clk_out_enb_offset);
+        let clk_src_reg: u32 = (CAR_VADDR + self.clk_source_offset);
 
         unsafe
         {
             if(self.clk_source_offset != 0)
             {
-                clk_src_reg.write_volatile((self.clk_source as u32) << 29 | (self.clk_divisor as u32));
+                poke32(clk_src_reg, (self.clk_source as u32) << 29 | (self.clk_divisor as u32));
             }
         
-            let prev_enb = clk_enb_reg.read_volatile();
-            let prev_dev = rst_dev_reg.read_volatile();
-            clk_enb_reg.write_volatile(prev_dev | bit!(self.dev_bit));
-            rst_dev_reg.write_volatile(prev_dev & !bit!(self.dev_bit));
+            poke32(clk_enb_reg, peek32(clk_enb_reg) | bit!(self.dev_bit));
+            poke32(rst_dev_reg, peek32(rst_dev_reg) & !(bit!(self.dev_bit)));
         }
     }
     
     pub fn disable(&self) {
-        let rst_dev_reg: *mut u32 = (CAR_VADDR + self.rst_dev_offset) as _;
-        let clk_enb_reg: *mut u32 = (CAR_VADDR + self.clk_out_enb_offset) as _;
+        let rst_dev_reg: u32 = (CAR_VADDR + self.rst_dev_offset);
+        let clk_enb_reg: u32 = (CAR_VADDR + self.clk_out_enb_offset);
 
-        unsafe
-        {
-            let prev_dev = rst_dev_reg.read_volatile();
-            let prev_enb = clk_enb_reg.read_volatile();
-            rst_dev_reg.write_volatile(prev_dev | bit!(self.dev_bit));
-            clk_enb_reg.write_volatile(prev_dev & !bit!(self.dev_bit));
-        }
+        poke32(rst_dev_reg, peek32(rst_dev_reg) | bit!(self.dev_bit));
+        poke32(clk_enb_reg, peek32(clk_enb_reg) & !(bit!(self.dev_bit)));
     }
     
     pub fn isEnabled(&self) -> bool {
-        let rst_dev_reg: *mut u32 = (CAR_VADDR + self.rst_dev_offset) as _;
-        let clk_enb_reg: *mut u32 = (CAR_VADDR + self.clk_out_enb_offset) as _;
+        let rst_dev_reg: u32 = (CAR_VADDR + self.rst_dev_offset);
+        let clk_enb_reg: u32 = (CAR_VADDR + self.clk_out_enb_offset);
 
         unsafe
         {
-            let rst_dev = rst_dev_reg.read_volatile();
-            let clk_enb = clk_enb_reg.read_volatile();
+            let rst_dev = peek32(rst_dev_reg);
+            let clk_enb = peek32(clk_enb_reg);
             
             if (rst_dev & bit!(self.dev_bit) != 0) {
                 return false;

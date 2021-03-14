@@ -6,6 +6,10 @@
  
 use core::ops;
 
+extern "C" {
+    pub fn t210_reset();
+}
+
 #[macro_use]
 mod util {
     macro_rules! bit {
