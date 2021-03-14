@@ -76,8 +76,8 @@ impl CarDeviceInfo
         
             let prev_enb = clk_enb_reg.read_volatile();
             let prev_dev = rst_dev_reg.read_volatile();
-            clk_enb_reg.write_volatile(prev_dev | bit(self.dev_bit));
-            rst_dev_reg.write_volatile(prev_dev & !bit(self.dev_bit));
+            clk_enb_reg.write_volatile(prev_dev | bit!(self.dev_bit));
+            rst_dev_reg.write_volatile(prev_dev & !bit!(self.dev_bit));
         }
     }
     
@@ -89,8 +89,8 @@ impl CarDeviceInfo
         {
             let prev_dev = rst_dev_reg.read_volatile();
             let prev_enb = clk_enb_reg.read_volatile();
-            rst_dev_reg.write_volatile(prev_dev | bit(self.dev_bit));
-            clk_enb_reg.write_volatile(prev_dev & !bit(self.dev_bit));
+            rst_dev_reg.write_volatile(prev_dev | bit!(self.dev_bit));
+            clk_enb_reg.write_volatile(prev_dev & !bit!(self.dev_bit));
         }
     }
     
@@ -103,11 +103,11 @@ impl CarDeviceInfo
             let rst_dev = rst_dev_reg.read_volatile();
             let clk_enb = clk_enb_reg.read_volatile();
             
-            if (rst_dev & bit(self.dev_bit) != 0) {
+            if (rst_dev & bit!(self.dev_bit) != 0) {
                 return false;
             }
 
-            if (clk_enb & bit(self.dev_bit) == 0) {
+            if (clk_enb & bit!(self.dev_bit) == 0) {
                 return false;
             }
 
