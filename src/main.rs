@@ -5,11 +5,6 @@
 #![allow(unused)]
 #![allow(non_snake_case)]
 
-use io::uart::*;
-use io::uart::UARTDevicePort::*;
-use core::panic::PanicInfo;
-use io::timer::*;
-
 #[macro_use] mod util;
 
 #[macro_use]
@@ -19,7 +14,12 @@ mod io;
 mod hos;
 mod arm;
 
-use crate::util::t210_reset;
+use util::t210_reset;
+use io::uart::*;
+use io::uart::UARTDevicePort::*;
+use core::panic::PanicInfo;
+use io::timer::*;
+use arm::fpu::*;
 
 global_asm!(include_str!("start.s"));
 
@@ -34,9 +34,11 @@ pub extern "C" fn main_warm()
 #[no_mangle]
 pub extern "C" fn main_cold() 
 {
+    fpuEnable();
+    
     let mut uart_a: UARTDevice = UARTDevice::new(UartA, 115200);
     
-    uart_a.writeStr("Waddup from EL2\n\r");
+    uart_a.writeStr("\n\r\n\r\n\rWaddup from EL2!\n\r");
     uart_a.waitForWrite();
     timerWait(1000000);
 }
