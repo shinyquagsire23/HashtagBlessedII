@@ -17,6 +17,7 @@ extern crate lazy_static;
 
 mod io;
 mod hos;
+mod arm;
 
 use crate::util::t210_reset;
 
