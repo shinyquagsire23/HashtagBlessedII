@@ -4,6 +4,5 @@
  * See LICENSE.md for terms of use.
  */
 
-pub mod hipc;
-pub mod kernel;
-pub mod smc;
+pub mod usbd;
+pub mod cdc;

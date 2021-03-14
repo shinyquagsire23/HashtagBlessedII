@@ -4,6 +4,9 @@
  * See LICENSE.md for terms of use.
  */
 
-pub mod hipc;
-pub mod kernel;
-pub mod smc;
+pub mod virq;
+pub mod vmmio;
+pub mod vsdmmc;
+pub mod vsmc;
+pub mod vsvc;
+pub mod vsysreg;
