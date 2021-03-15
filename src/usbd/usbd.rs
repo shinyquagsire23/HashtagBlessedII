@@ -104,7 +104,7 @@ pub const USB_ST_UF:     u32 = 0x06;
 pub const USBD_XFERBUF_SIZE: u32 = (0x1000);
 
 #[macro_use]
-mod util {
+mod usbd {
     // 0x21c + n*4
     macro_rules! USB2D_ENDPTCTRL {
         ($n:expr) => {
@@ -193,6 +193,26 @@ mod util {
     macro_rules! CTRL_EPSTALL {
         ($ep:expr) => {
             (USB2D_IS_EP_TX!(ep) ? CTRL_TXSTALL : CTRL_RXSTALL)
+        }
+    }
+    
+    // EpCapabilities
+    macro_rules! EPCAP_MAX_PKT {
+        ($n:expr) => {
+            ($n << 16)
+        }
+    }
+    
+    // DtdInfo
+    macro_rules! DTD_GETINFO_BYTES {
+        ($val:expr) => {
+            ($val >> 16)
+        }
+    }
+    
+    macro_rules! INFO_BYTES {
+        ($n:expr) => {
+            (($n & 0xFFFF) << 16)
         }
     }
 }
@@ -304,5 +324,233 @@ pub enum UsbEpAddress
     BULK_OUT = 0x01,
     // Bulk in endpoint address
     BULK_IN  = 0x81,
+}
+
+
+
+#[repr(C)]
+pub struct UsbSetupPacket
+{
+    bmRequestType: u8,
+    bRequest: u8,
+    wValue: u16,
+    wIndex: u16,
+    wLength: u16
+}
+
+#[repr(C)]
+pub struct UsbControllerContext
+{
+    UsbPortSpeed: u32,
+    UsbBaseAddr: u32, // vu32*
+    setupPkt: UsbSetupPacket,
+    EnumerationDone: u8,
+    UsbControllerEnabled: u8,
+    UsbConfigurationNo: u8,
+    UsbInterfaceNo: u8,
+    InitializationDone: u32
+}
+
+#[repr(C)]
+pub struct UsbDevQueueHead
+{
+    EpCapabilities: u32,
+    CurrentDTDPtr: u32,
+    NextDTDPtr: u32,
+    DtdInfo: u32,
+    BufferPtrs: [u32; 5],
+    Reserved: u32,
+    setupBuffer: UsbSetupPacket,
+    Reserved0: u32,
+    Reserved1: u32,
+    Reserved2: u32,
+    Reserved3: u32,
+}
+
+// EpCapabilities
+pub const EPCAP_ZLT:     u32 = (1 << 29);	// stop on zero-len xfer
+pub const EPCAP_IOS:     u32 = (1 << 15);	// IRQ on setup
+pub const EPCAP_HISPEED: u32 = (1 << 12);
+
+#[repr(C)]
+pub struct UsbTransDesc
+{
+    NextDtd: u32,
+    DtdInfo: u32,
+    BufPtrs: [u32; 5],
+    Reserved: u32,
+}
+
+// DtdInfo
+pub const INFO_IOC:          u32 = (bit!(15)); // interrupt on complete
+pub const INFO_ACTIVE:       u32 = (bit!(7));
+pub const INFO_HALTED:       u32 = (bit!(6));
+pub const INFO_BUFFER_ERROR: u32 = (bit!(5));
+pub const INFO_TX_ERROR:     u32 = (bit!(3));
+
+#[repr(C)]
+pub struct UsbDtDevice
+{
+    bLength: u8,
+    bDescriptorType: u8,
+    bcdUsb: u16,
+    bDeviceClass: u8,
+    bDeviceSubclass: u8,
+    bDeviceProtocol: u8,
+    bMaxPacketSize: u8,
+    idVendor: u16,
+    idProduct: u16,
+    bcdDevice: u16,
+    iManufacturer: u8,
+    iProduct: u8,
+    iSerialNumber: u8,
+    bNumConfigurations: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtString
+{
+    bLength: u8,
+    bDescriptorType: u8,
+    data: [u16; 0x1F] // packets are max 0x40 here so just alloc up to that
+}
+
+#[repr(C)]
+pub struct UsbDtConfig
+{
+    bLength: u8,
+    bDescriptorType: u8,
+    wTotalLength: u16,
+    bNumInterfaces: u8,
+    bConfigurationValue: u8,
+    iConfiguration: u8,
+    bmAttributes: u8,
+    bMaxPower: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtInterface
+{
+    bLength: u8,
+    bDescriptorType: u8,
+    bInterfaceNumber: u8,
+    bAlternateSetting: u8,
+    bNumEndpoints: u8,
+    bInterfaceClass: u8,
+    bInterfaceSubclass: u8,
+    bInterfaceProtocol: u8,
+    iInterface: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtEndpoint
+{
+    bLength: u8,
+    bDescriptorType: u8,
+    bEndpointAddress: u8,
+    bmAttributes: u8,
+    wMaxPacketSize: u16,
+    bInterval: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtClassHeaderFunc
+{
+    bFunctionLength: u8,
+    bDescriptorType: u8,
+    bDescriptorSubtype: u8,  /* 0x00 */
+	bcdCDC: u16,
+}
+
+#[repr(C)]
+pub struct UsbDtClassCallMgmt
+{
+    bFunctionLength: u8,
+    bDescriptorType: u8,
+    bDescriptorSubtype: u8,	/* 0x01 */
+    bmCapabilities: u8,
+    bDataInterface: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtClassAbstractControl
+{
+    bFunctionLength: u8,
+    bDescriptorType: u8,
+    bDescriptorSubtype: u8,	/* 0x02 */
+    bmCapabilities: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtClassUnionFunction
+{
+    bFunctionLength: u8,
+    bDescriptorType: u8,
+    bDescriptorSubtype: u8,	/* 0x06 */
+    bMasterInterface: u8,
+    bSlaveInterface0: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtDeviceQualifier
+{
+    bLength: u8,
+    bDescriptorType: u8,
+    bcdUsb: u16,
+    bDeviceClass: u8,
+    bDeviceSubclass: u8,
+    bDeviceProtocol: u8,
+    bMaxPacketSize0: u8,
+    bNumConfigurations: u8,
+    bReserved: u8,
+}
+
+#[repr(C)]
+pub struct UsbDtInterfaceAssociation
+{
+    bLength: u8,
+    bDescriptorType: u8,
+    bFirstInterface: u8,
+    bInterfaceCount: u8,
+    bFunctionClass: u8,
+    bFunctionSubclass: u8,
+    bFunctionProtocol: u8,
+    iFunction: u8,
+}
+
+// Endpoint info struct
+pub struct UsbdEndpoint
+{
+    isAssigned: bool,
+    isEnabled: bool,
+    //void (*handler)(void);
+    //UsbTransDesc* pDataTransDesc;
+    epConfigured: u32,
+    bytesRequested: u32,
+    
+    epNum: u8,
+    epAddress: u8,
+    attributes: u8,
+    maxPacketSize: u16,
+    interval: u8,
+}
+
+// Interface info struct
+pub struct UsbdInterface
+{
+    class: u8,
+    subclass: u8,
+    protocol: u8,
+    interfaceNumber: u8,
+    
+    //void* extra_desc_data;
+    //size_t extra_desc_size;
+    
+    associatedNum: u8,
+    
+    numEndpoints: u8,
+    //UsbdEndpoint* endpoints;
+    
+    //UsbdInterface* next;
 }
 
