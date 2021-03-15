@@ -7,9 +7,13 @@
 global_asm!(include_str!("threading.s"));
 
 extern "C" {
-    pub fn get_core() -> u32;
-    pub fn get_core2() -> u32;
+    pub fn get_core() -> u8;
+    pub fn get_core2() -> u8;
     pub fn get_mpidr() -> u64;
     pub fn get_vmpidr() -> u64;
     pub fn getSP_EL0() -> u64;
+}
+
+pub fn getCore() -> u8 {
+    unsafe { return get_core(); }
 }

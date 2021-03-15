@@ -7,6 +7,7 @@
 #![no_std]
 #![no_main]
 #![feature(global_asm)]
+#![feature(asm)]
 #![allow(unused_parens)]
 #![allow(unused)]
 #![allow(non_snake_case)]
@@ -30,6 +31,9 @@ use io::uart::UARTDevicePort::*;
 use core::panic::PanicInfo;
 use io::timer::*;
 use arm::fpu::*;
+use arm::gic::*;
+use vm::virq::*;
+use usbd::usbd::*;
 
 global_asm!(include_str!("start.s"));
 
@@ -47,6 +51,18 @@ pub extern "C" fn main_cold()
     fpuEnable();
     
     let mut uart_a: UARTDevice = UARTDevice::new(UartA, 115200);
+    
+    //smmu_init();
+    
+    let mut gic: GIC = GIC::new();
+    gic.init();
+
+    //vmmio_init();
+    //vsvc_init();
+
+    gic.enableInterrupt(IRQ_T210_USB, 0);
+    //tegra_irq_en(IRQNUM_T210_USB);
+    usbd_recover();
     
     uart_a.writeStr("\n\r\n\r\n\rWaddup from EL2!\n\r");
     uart_a.waitForWrite();

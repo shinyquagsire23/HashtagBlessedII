@@ -5,6 +5,7 @@
  */
  
 use core::ops;
+use core::mem;
 
 extern "C" {
     pub fn t210_reset();
@@ -140,7 +141,57 @@ impl MMIOReg
         }
     }
     
+    pub fn r32(&self) -> u32 {
+        unsafe
+        {
+            let mut_reg: *mut u32 = (self.addr) as _;
+            return mut_reg.read_volatile();
+        }
+    }
+    
+    pub fn w32(&self, val: u32) {
+        unsafe
+        {
+            let mut_reg: *mut u32 = (self.addr) as _;
+            mut_reg.write_volatile(val);
+        }
+    }
+    
+    pub fn r8(&self) -> u8 {
+        unsafe
+        {
+            let mut_reg: *mut u8 = (self.addr) as _;
+            return mut_reg.read_volatile();
+        }
+    }
+    
+    pub fn w8(&self, val: u8) {
+        unsafe
+        {
+            let mut_reg: *mut u8 = (self.addr) as _;
+            mut_reg.write_volatile(val);
+        }
+    }
+    
+    pub fn set8(&self, val: u8) {
+        let old: u8 = self.r8();
+        self.w8(old | val);
+    }
+    
+    pub fn unset8(&self, val: u8) {
+        let old: u8 = self.r8();
+        self.w8(old & !val);
+    }
+    
     pub fn bits_set(&self, val: u32) -> bool {
         return (self.read() & val != 0);
+    }
+    
+    pub fn idx8(&self, idx: u32) -> MMIOReg {
+        return MMIOReg::new(self.addr + (idx as u32));
+    }
+    
+    pub fn idx32(&self, idx: u32) -> MMIOReg {
+        return MMIOReg::new(self.addr + ((idx as u32) * (mem::size_of::<u32>() as u32)));
     }
 }

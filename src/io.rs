@@ -9,3 +9,4 @@ pub mod uart;
 pub mod timer;
 pub mod pinmux;
 pub mod pmc;
+pub mod ictlr;

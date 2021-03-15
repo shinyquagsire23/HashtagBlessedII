@@ -554,3 +554,45 @@ pub struct UsbdInterface
     //UsbdInterface* next;
 }
 
+pub enum UsbdError
+{
+    Success = 0
+}
+
+//
+// END TYPES/STRUCTS
+//
+
+pub fn usbd_recover() -> UsbdError
+{
+    let mut ret: UsbdError = UsbdError::Success;
+    
+    /*usbd_init();
+    cdc_init();
+    
+    usbd_init_context();
+    usbd_enable_clocks();
+    usbd_init_controller();
+    
+    debug_interface = usbd_interface_alloc(2);
+    debug_interface->class = 0xFF;
+    debug_interface->subclass = 0xFF;
+    debug_interface->protocol = 0xFF;
+    usbd_ep_construct(&debug_interface->endpoints[0], 512, USB_EPATTR_TTYPE_BULK, 0);
+    usbd_ep_construct(&debug_interface->endpoints[1], 512, USB_EPATTR_TTYPE_BULK, 0);
+
+    usbd_ep_idle(usbd_get_endpoint_from_epnum(USB_EP_BULK_OUT));
+    
+    //irq_bind(IRQ_USB, irq_usb);
+    //irq_bind(IRQ_USB2, irq_usb);
+    
+    GetUsbBaseAddress()[USB2D_USBINTR] |= (USBSTS_USBINT | USBSTS_USBPORT); // usb interrupt enable
+    */
+    
+    /*while (!GetUsbCtx()->EnumerationDone)
+    {
+        irq_usb();
+    }*/
+
+    return ret;
+}

@@ -9,3 +9,4 @@ pub mod exceptions;
 pub mod fpu;
 pub mod threading;
 pub mod mmu;
+pub mod gic;
