@@ -49,22 +49,14 @@ pub const GICH_INT_EOI: u32 = (bit!(0)); // end of interrupt IRQ
 
 pub fn tegra_irq_en(id: i32)
 {
-    // TODO
-    /*let set: i32 = (id / ICTLR_BITS) + ICTLR_MIN;
+    let set: i32 = (id / ICTLR_BITS) + ICTLR_MIN;
     let bit: i32 = id % ICTLR_BITS;
 
     if(set > ICTLR_MAX)
     {
         return;
     }
-
-    ICTLR_CPU_IEP_CLASS_0(set) &= ~BIT(bit);
-    ICTLR_CPU_IER_SET_0(set) = BIT(bit);
-
-    ICTLR_CPU1_IEP_CLASS_0(set) &= ~BIT(bit);
-    ICTLR_CPU1_IER_SET_0(set) &= ~BIT(bit);
-    ICTLR_CPU2_IEP_CLASS_0(set) &= ~BIT(bit);
-    ICTLR_CPU2_IER_SET_0(set) &= ~BIT(bit);
-    ICTLR_CPU3_IEP_CLASS_0(set) &= ~BIT(bit);
-    ICTLR_CPU3_IER_SET_0(set) &= ~BIT(bit);*/
+    
+    let mut ictlr: ICTLRSet = ICTLRSet::new(set);
+    ictlr.irq_en(bit);
 }

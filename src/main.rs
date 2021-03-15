@@ -61,7 +61,7 @@ pub extern "C" fn main_cold()
     //vsvc_init();
 
     gic.enableInterrupt(IRQ_T210_USB, 0);
-    //tegra_irq_en(IRQNUM_T210_USB);
+    tegra_irq_en(IRQNUM_T210_USB as i32);
     usbd_recover();
     
     uart_a.writeStr("\n\r\n\r\n\rWaddup from EL2!\n\r");
