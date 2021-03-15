@@ -10,6 +10,7 @@
 #![allow(unused_parens)]
 #![allow(unused)]
 #![allow(non_snake_case)]
+#![feature(unboxed_closures, fn_traits)]
 
 #[macro_use] mod util;
 

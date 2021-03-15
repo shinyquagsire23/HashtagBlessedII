@@ -35,6 +35,7 @@ pub fn poke32(addr: u32, val: u32) {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct MMIOReg
 {
     addr: u32
@@ -92,6 +93,28 @@ impl ops::BitAndAssign<u32> for MMIOReg {
         self.write(out);
     }
 }
+
+/*impl ops::Fn<(u32,)> for MMIOReg {
+    extern "rust-call" fn call(&self, args: (u32,)) -> Self {
+        self.write(args.0);
+        return self.clone();
+    }
+}
+
+impl ops::FnOnce<(u32,)> for MMIOReg {
+    type Output = Self;
+    extern "rust-call" fn call_once(self, args: (u32,)) -> Self {
+        self.call(args);
+        return self;
+    }
+}
+
+impl ops::FnMut<(u32,)> for MMIOReg {
+    extern "rust-call" fn call_mut(&mut self, args: (u32,)) -> Self {
+        self.call(args);
+        return self.clone();
+    }
+}*/
 
 impl MMIOReg
 {
