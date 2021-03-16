@@ -1021,11 +1021,9 @@ impl UsbDevice
     {
         self.init_context();
     
-        logu32(self.get_ep_queue_head());
         memset_iou32(self.get_ep_queue_head() as u64, 0, mem::size_of::<UsbDevQueueHead>() * USBD_EPNUM_MAX);
         for i in 0..USBD_EPNUM_MAX
         {
-            logu32((self.endpoints[i].pDataTransDesc & 0xFFFFFFFF) as u32);
             memset_iou32(self.endpoints[i].pDataTransDesc, 0, mem::size_of::<UsbTransDesc>());
         }
 
@@ -1080,9 +1078,6 @@ pub fn usbd_recover() -> UsbdError
     usbd_ep_construct(&debug_interface->endpoints[1], 512, USB_EPATTR_TTYPE_BULK, 0);
 
     usbd_ep_idle(usbd_get_endpoint_from_epnum(USB_EP_BULK_OUT));
-    
-    //irq_bind(IRQ_USB, irq_usb);
-    //irq_bind(IRQ_USB2, irq_usb);
     
     GetUsbBaseAddress()[USB2D_USBINTR] |= (USBSTS_USBINT | USBSTS_USBPORT); // usb interrupt enable
     */

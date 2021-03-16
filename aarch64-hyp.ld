@@ -28,6 +28,8 @@ SECTIONS
         *(.roda)
         *(.rodata.*)
         *(.gnu.linkonce.r*)
+        *(.eh_frame)
+        *(.eh_frame_hdr)
         SORT(CONSTRUCTORS)
         . = ALIGN(4);   /* REQUIRED. LD is flaky without it. */
     } >ram = 0xff

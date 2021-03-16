@@ -12,6 +12,13 @@
 #![allow(unused)]
 #![allow(non_snake_case)]
 #![feature(unboxed_closures, fn_traits)]
+#![feature(alloc_error_handler)]
+#![feature(default_alloc_error_handler)]
+
+extern crate alloc;
+mod heap;
+
+use heap::HtbHeap;
 
 #[macro_use] mod util;
 
@@ -39,8 +46,13 @@ use arm::gic::*;
 use vm::virq::*;
 use usbd::usbd::*;
 use logger::*;
+use alloc::vec::Vec;
 
 global_asm!(include_str!("start.s"));
+
+#[global_allocator]
+static ALLOCATOR: HtbHeap = HtbHeap::empty();
+static HEAP_RES: [u8; 0x100000] = [0; 0x100000];
 
 #[no_mangle]
 pub extern "C" fn main_warm() 
@@ -55,6 +67,8 @@ pub extern "C" fn main_warm()
 pub extern "C" fn main_cold() 
 {
     fpuEnable();
+    
+    unsafe { ALLOCATOR.init((&HEAP_RES[0] as *const u8) as usize, 0x100000); }
     
     let mut uart_a: UARTDevice = UARTDevice::new(UartA);
     uart_a.init(115200);
@@ -94,8 +108,23 @@ pub extern "C" fn irq_handle()
 }
 
 #[panic_handler]
-fn on_panic(_info: &PanicInfo) -> ! {
+fn on_panic(panic_info: &PanicInfo) -> ! {
     log("panic?\n\r");
+    if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+        log(s);
+        log("\n\r");
+    } else {
+        log("Couldn't get error info!\n\r");
+    }
+    if let Some(location) = panic_info.location() {
+       log("panic occurred in file '");
+       log(location.file());
+       log("' at line ");
+       logu32(location.line());
+       log("\n\r");
+    } else {
+        log("panic occurred but can't get location information...\n\r");
+    }
     timerWait(1000000);
     loop {}
 }

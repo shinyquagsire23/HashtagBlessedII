@@ -36,6 +36,8 @@ version = "0.1.0"
 dependencies = [
  "defmt",
  "lazy_static",
+ "linked_list_allocator",
+ "synctools",
 ]
 
 [[package]]
@@ -46,6 +48,12 @@ checksum = "76f033c7ad61445c5b347c7382dd1237847eb1bce590fe50365dcb33d546be73"
 dependencies = [
  "spin",
 ]
+
+[[package]]
+name = "linked_list_allocator"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "822add9edb1860698b79522510da17bef885171f75aa395cff099d770c609c24"
 
 [[package]]
 name = "pest"
@@ -108,6 +116,12 @@ dependencies = [
  "quote",
  "unicode-xid",
 ]
+
+[[package]]
+name = "synctools"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e153db44f230571fa551c3274b388f42d2d02ab04c55a4781a95d2552f165f52"
 
 [[package]]
 name = "ucd-trie"

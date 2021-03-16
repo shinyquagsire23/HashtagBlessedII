@@ -8,6 +8,12 @@ edition = "2018"
 
 [dependencies]
 defmt = "0.2.1"
+synctools = "0.1.0"
+
+[dependencies.linked_list_allocator]
+default-features = false
+version = "0.8.11"
+features = ["const_mut_refs"]
 
 [dependencies.lazy_static]
 version = "0.2.1"
