@@ -5,3 +5,7 @@
  */
 
 #![allow(warnings, unused)]
+
+pub const APBDEV_PMC_BASE: u32 = 0x7000E400;
+
+pub const APBDEV_PMC_USB_AO: u32 = (APBDEV_PMC_BASE + 0x0F0);

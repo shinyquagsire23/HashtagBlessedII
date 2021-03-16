@@ -10,3 +10,4 @@ pub mod timer;
 pub mod pinmux;
 pub mod pmc;
 pub mod ictlr;
+pub mod smmu;

@@ -11,6 +11,22 @@ use crate::util::*;
 const CAR_PADDR: u32 = 0x60006000;
 const CAR_VADDR: u32 = 0x60006000;
 
+
+pub const CLK_RST_CONTROLLER_CLK_OUT_ENB_L:            u32 = (CAR_PADDR + 0x010);
+pub const CLK_RST_CONTROLLER_OSC_CTRL:                 u32 = (CAR_PADDR + 0x050);
+pub const CLK_RST_CONTROLLER_CLK_OUT_ENB_Y:            u32 = (CAR_PADDR + 0x298);
+pub const CLK_RST_CONTROLLER_RST_DEV_L_SET:            u32 = (CAR_PADDR + 0x300);
+pub const CLK_RST_CONTROLLER_RST_DEV_L_CLR:            u32 = (CAR_PADDR + 0x304);
+pub const CLK_RST_CONTROLLER_RST_DEV_W_SET:            u32 = (CAR_PADDR + 0x438);
+pub const CLK_RST_CONTROLLER_RST_DEV_W_CLR:            u32 = (CAR_PADDR + 0x43C);
+pub const CLK_RST_CONTROLLER_UTMIP_PLL_CFG0:           u32 = (CAR_PADDR + 0x480);
+pub const CLK_RST_CONTROLLER_UTMIP_PLL_CFG1:           u32 = (CAR_PADDR + 0x484);
+pub const CLK_RST_CONTROLLER_UTMIP_PLL_CFG2:           u32 = (CAR_PADDR + 0x488);
+pub const CLK_RST_CONTROLLER_UTMIPLL_HW_PWRDN_CFG0:    u32 = (CAR_PADDR + 0x52C);
+pub const CLK_RST_CONTROLLER_CLK_SOURCE_USB2_HSIC_TRK: u32 = (CAR_PADDR + 0x6CC);
+pub const XUSB_PADCTL_RST: u32 = (bit!(14));
+pub const CLK_ENB_USBD:    u32 = (bit!(22));
+
 pub struct CarDeviceInfo
 {
     rst_dev_offset: u32,
@@ -53,6 +69,15 @@ pub const CAR_INFO_UART_D: CarDeviceInfo = CarDeviceInfo {
     clk_out_enb_offset: 0x0148,
     clk_source_offset: 0x1C0,
     dev_bit: 1,
+    clk_source: 0,
+    clk_divisor: 0,
+};
+
+pub const CAR_INFO_USBD: CarDeviceInfo = CarDeviceInfo {
+    rst_dev_offset: 0x004,
+    clk_out_enb_offset: 0x010,
+    clk_source_offset: 0,
+    dev_bit: 22,
     clk_source: 0,
     clk_divisor: 0,
 };

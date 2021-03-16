@@ -30,6 +30,7 @@ use io::uart::*;
 use io::uart::UARTDevicePort::*;
 use core::panic::PanicInfo;
 use io::timer::*;
+use io::smmu::*;
 use arm::fpu::*;
 use arm::gic::*;
 use vm::virq::*;
@@ -52,7 +53,7 @@ pub extern "C" fn main_cold()
     
     let mut uart_a: UARTDevice = UARTDevice::new(UartA, 115200);
     
-    //smmu_init();
+    smmu_init();
     
     let mut gic: GIC = GIC::new();
     gic.init();

@@ -36,6 +36,17 @@ pub fn poke32(addr: u32, val: u32) {
     }
 }
 
+#[inline(always)]
+pub fn memset_iou32(addr: u64, val: u32, len: usize) {
+    unsafe {
+        for i in 0..(len/4)
+        {
+            let mut_reg: *mut u32 = (addr + (i*4) as u64) as _;
+            mut_reg.write_volatile(val);
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct MMIOReg
 {
@@ -60,8 +71,6 @@ impl ops::BitOr<u32> for MMIOReg {
 
     fn bitor(self, _rhs: u32) -> u32 {
         let out: u32 = self.read() | _rhs;
-        
-        self.write(out);
 
         return out;
     }
@@ -80,8 +89,6 @@ impl ops::BitAnd<u32> for MMIOReg {
 
     fn bitand(self, _rhs: u32) -> u32 {
         let out: u32 = self.read() & _rhs;
-        
-        self.write(out);
 
         return out;
     }
