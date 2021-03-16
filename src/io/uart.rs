@@ -122,6 +122,7 @@ pub fn uart_configure_d() {
 
 pub struct UARTDevice
 {
+    port: UARTDevicePort,
     UART_THR_DLAB: MMIOReg,
     UART_IER_DLAB: MMIOReg,
     UART_IIR_FCR: MMIOReg,
@@ -139,18 +140,11 @@ pub struct UARTDevice
 
 impl UARTDevice
 {
-    pub fn new(port: UARTDevicePort, baudrate: u32) -> Self {
-        match port {
-            UARTDevicePort::UartA => uart_configure_a(),
-            UARTDevicePort::UartB => uart_configure_b(),
-            UARTDevicePort::UartC => uart_configure_c(),
-            UARTDevicePort::UartD => uart_configure_d(),
-            UARTDevicePort::UartE => {},
-        }
-        
+    pub fn new(port: UARTDevicePort) -> Self {
         let uart_base: u32 = UART_PADDR + UART_OFFSETS[port as usize];
     
         let mut retval: UARTDevice = UARTDevice {
+            port: port,
             UART_THR_DLAB: MMIOReg::new(uart_base + 0x0),
             UART_IER_DLAB: MMIOReg::new(uart_base + 0x4),
             UART_IIR_FCR: MMIOReg::new(uart_base + 0x8),
@@ -165,12 +159,23 @@ impl UARTDevice
             UART_VENDOR_STATUS: MMIOReg::new(uart_base + 0x2C),
             UART_ASR: MMIOReg::new(uart_base + 0x3C),
         };
-        
-        retval.setBaudrate(baudrate);
-        retval.interruptDisable(UART_IE_ALL);
-        retval.csrSet(UART_BAUD_PULSE_4_14);
-        
+
         return retval;
+    }
+    
+    pub fn init(&mut self, baudrate: u32)
+    {
+        match self.port {
+            UARTDevicePort::UartA => uart_configure_a(),
+            UARTDevicePort::UartB => uart_configure_b(),
+            UARTDevicePort::UartC => uart_configure_c(),
+            UARTDevicePort::UartD => uart_configure_d(),
+            UARTDevicePort::UartE => {},
+        }
+        
+        self.setBaudrate(baudrate);
+        self.interruptDisable(UART_IE_ALL);
+        self.csrSet(UART_BAUD_PULSE_4_14);
     }
     
     pub fn setBaudrate(&mut self, baudrate: u32)
@@ -272,15 +277,26 @@ impl UARTDevice
         }
     }
     
+    pub fn writeBytes(&mut self, data: &[u8])
+    {
+        for byte in data {
+            while (self.UART_LSR.bits_set(UART_TX_FIFO_FULL)) {}
+
+            self.UART_THR_DLAB.write(*byte as u32);
+        }
+    }
+    
     pub fn waitForWrite(&mut self)
     {
         // Flush TX
         //self.UART_IIR_FCR |= UART_TX_CLR;
 
-        for i in 1..8000 {
+        for i in 1..80 {
             if (self.UART_LSR.bits_set(UART_TMTY)) { break };
             timerWait(1);
         }
+        
+        timerWait(100);
     }
 }
 

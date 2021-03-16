@@ -11,7 +11,9 @@ use crate::util::*;
 use crate::io::car::*;
 use crate::io::timer::*;
 use crate::io::pmc::*;
+use crate::logger::*;
 use core::mem;
+use defmt::info;
 
 pub const USB2D_BASE: u32 = (0x7D000000);
 
@@ -743,30 +745,30 @@ impl UsbDevice
     
     pub fn w32(&mut self, offs: u32, val: u32)
     {
-        poke32(self.usbfCtxt.UsbBaseAddr + offs, val);
+        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), val);
     }
     
     pub fn r32(&mut self, offs: u32) -> u32
     {
-        return peek32(self.usbfCtxt.UsbBaseAddr + offs);
+        return peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
     }
     
     pub fn echo32(&mut self, offs: u32)
     {
-        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + offs);
-        poke32(self.usbfCtxt.UsbBaseAddr + offs, old);
+        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
+        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), old);
     }
     
     pub fn or32(&mut self, offs: u32, val: u32)
     {
-        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + offs);
-        poke32(self.usbfCtxt.UsbBaseAddr + offs, old | val);
+        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
+        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), old | val);
     }
     
     pub fn and32(&mut self, offs: u32, val: u32)
     {
-        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + offs);
-        poke32(self.usbfCtxt.UsbBaseAddr + offs, old & val);
+        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
+        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), old & val);
     }
     
     pub fn enable_clocks(&mut self)
@@ -902,9 +904,9 @@ impl UsbDevice
         timerWait(100);
         self.or32(USB1_UTMIP_BIAS_CFG1, bit!(0));
         self.and32(USB1_UTMIP_BIAS_CFG1, !bit!(23));
-        clk_out_enb_y &= !bit!(18);
+        clk_out_enb_y &= !(bit!(18));
         utmip_pll_cfg2 &= !(bit!(0) | bit!(4) | bit!(2) | bit!(24));
-        utmip_pll_cfg2 |= bit!(1) | 0x28 | 0x2000000;
+        utmip_pll_cfg2 |= (bit!(1) | 0x28 | 0x2000000);
         timerWait(1);
         self.and32(USB1_UTMIP_BIAS_CFG0, 0xFF3FF7FF);
         timerWait(1);
@@ -924,7 +926,7 @@ impl UsbDevice
         if(self.enable_devicemode() != UsbdError::Success)
         {
             // TODO log
-            //printf("timed out enabling device mode\n\r");
+            log("timed out enabling device mode\n\r");
         }
         self.usbfCtxt.EnumerationDone = false;
     }
@@ -935,9 +937,10 @@ impl UsbDevice
         self.and32(USB_SUSP_CTRL, !SUSPCTRL_UTMIP_RESET);
         
         let mut timed_out: bool = false;
+
         for i in 0..400000
         {
-            timerWait(1);
+            timerWait(80000);
 
             timed_out = (self.r32(USB_SUSP_CTRL) & SUSPCTRL_USB_PHY_CLK_VALID) == 0;
             if (!timed_out) { break; }
@@ -945,11 +948,10 @@ impl UsbDevice
         
         if (timed_out)
         {
-            //printf("clock is invalid\n\r");
+            log("clock is invalid\n\r");
             return UsbdError::HwTimeOut;
         }
-
-
+        
         self.usbfCtxt.UsbControllerEnabled = true;
         self.w32(USB2D_PERIODICLISTBASE, 0);
         self.echo32(USB2D_ENDPTSETUPSTAT);
@@ -959,7 +961,7 @@ impl UsbDevice
         self.or32(USB2D_USBCMD, USBCMD_RST);
         for i in 0..100000
         {
-            timerWait(1);
+            timerWait(80000);
 
             timed_out = (self.r32(USB2D_USBCMD) & USBCMD_RST) != 0;
             if (!timed_out) { break; }
@@ -981,7 +983,7 @@ impl UsbDevice
         
         if (timed_out)
         {
-            //printf("clock is invalid 2\n\r");
+            log("clock is invalid 2\n\r");
             return UsbdError::HwTimeOut;
         }
         
@@ -996,7 +998,7 @@ impl UsbDevice
         
         if (timed_out)
         {
-            //printf("not in device mode\n\r");
+            log("not in device mode\n\r");
             return UsbdError::HwTimeOut;
         }
         
@@ -1012,16 +1014,18 @@ impl UsbDevice
     
     pub fn get_ep_queue_head(&mut self) -> u32
     {
-        return self.r32(USB2D_QH_EP_n_OUT);
+        return self.usbfCtxt.UsbBaseAddr + (USB2D_QH_EP_n_OUT*4);
     }
     
     pub fn init_controller(&mut self) -> UsbdError
     {
         self.init_context();
     
+        logu32(self.get_ep_queue_head());
         memset_iou32(self.get_ep_queue_head() as u64, 0, mem::size_of::<UsbDevQueueHead>() * USBD_EPNUM_MAX);
         for i in 0..USBD_EPNUM_MAX
         {
+            logu32((self.endpoints[i].pDataTransDesc & 0xFFFFFFFF) as u32);
             memset_iou32(self.endpoints[i].pDataTransDesc, 0, mem::size_of::<UsbTransDesc>());
         }
 
@@ -1066,6 +1070,7 @@ pub fn usbd_recover() -> UsbdError
     usbd.init_context();
     usbd.enable_clocks();
     usbd.init_controller();
+    log ("USB controller initialized...\n\r");
     
     /*debug_interface = usbd_interface_alloc(2);
     debug_interface->class = 0xFF;

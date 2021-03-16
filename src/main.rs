@@ -19,6 +19,9 @@
 extern crate lazy_static;
 
 mod io;
+
+#[macro_use] mod logger;
+
 mod hos;
 mod arm;
 mod usbd;
@@ -35,15 +38,17 @@ use arm::fpu::*;
 use arm::gic::*;
 use vm::virq::*;
 use usbd::usbd::*;
+use logger::*;
 
 global_asm!(include_str!("start.s"));
 
 #[no_mangle]
 pub extern "C" fn main_warm() 
 {
-    let mut uart_a: UARTDevice = UARTDevice::new(UartA, 115200);
+    let mut uart_a: UARTDevice = UARTDevice::new(UartA);
     
-    uart_a.writeStr("Yo from EL2\n\r")
+    uart_a.writeStr("Yo from EL2\n\r");
+    timerWait(1000000);
 }
 
 #[no_mangle]
@@ -51,8 +56,10 @@ pub extern "C" fn main_cold()
 {
     fpuEnable();
     
-    let mut uart_a: UARTDevice = UARTDevice::new(UartA, 115200);
+    let mut uart_a: UARTDevice = UARTDevice::new(UartA);
+    uart_a.init(115200);
     
+    logger_init();
     smmu_init();
     
     let mut gic: GIC = GIC::new();
@@ -61,28 +68,34 @@ pub extern "C" fn main_cold()
     //vmmio_init();
     //vsvc_init();
 
-    gic.enableInterrupt(IRQ_T210_USB, 0);
-    tegra_irq_en(IRQNUM_T210_USB as i32);
+    //gic.enableInterrupt(IRQ_T210_USB, 0);
+    //tegra_irq_en(IRQNUM_T210_USB as i32);
     usbd_recover();
     
-    uart_a.writeStr("\n\r\n\r\n\rWaddup from EL2!\n\r");
-    uart_a.waitForWrite();
+    log("\n\r\n\r\n\rWaddup from EL2!\n\r");
     timerWait(1000000);
+    loop {}
 }
 
 #[no_mangle]
 pub extern "C" fn exception_handle() 
 {
-    
+    log("exception?\n\r");
+    timerWait(1000000);
+    loop {}
 }
 
 #[no_mangle]
 pub extern "C" fn irq_handle() 
 {
-    
+    log("IRQ?\n\r");
+    timerWait(1000000);
+    loop {}
 }
 
 #[panic_handler]
 fn on_panic(_info: &PanicInfo) -> ! {
+    log("panic?\n\r");
+    timerWait(1000000);
     loop {}
 }

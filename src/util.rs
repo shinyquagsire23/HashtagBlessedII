@@ -191,7 +191,7 @@ impl MMIOReg
     }
     
     pub fn bits_set(&self, val: u32) -> bool {
-        return (self.read() & val != 0);
+        return ((self.read() & val) != 0);
     }
     
     pub fn idx8(&self, idx: u32) -> MMIOReg {
