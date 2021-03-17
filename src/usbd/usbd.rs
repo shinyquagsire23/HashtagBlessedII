@@ -14,6 +14,7 @@ use crate::io::pmc::*;
 use crate::logger::*;
 use core::mem;
 use defmt::info;
+use alloc::vec::Vec;
 
 pub const USB2D_BASE: u32 = (0x7D000000);
 
@@ -98,8 +99,8 @@ pub const USBD_EPIDX_MAX:        u32 = (16);
 
 pub const USBD_CTRL_PKT_MAX:     u16 = (64);
 
-pub const USB_EPATTR_TTYPE_BULK: u32 = (2);
-pub const USB_EPATTR_TTYPE_INTR: u32 = (3);
+pub const USB_EPATTR_TTYPE_BULK: u8 = (2);
+pub const USB_EPATTR_TTYPE_INTR: u8 = (3);
 
 pub const CS_INTERFACE:  u32 = 0x24;
 pub const USB_ST_HEADER: u32 = 0x00;
@@ -120,7 +121,7 @@ mod usbd {
     
     macro_rules! USB_EPATTR_TTYPE {
         ($attr:expr) => {
-            (attr & 0x3)
+            ($attr & 0x3)
         }
     }
     
@@ -132,13 +133,13 @@ mod usbd {
     
     macro_rules! USB2D_EPIDX {
         ($ep:expr) => {
-            (ep >> 1)
+            ($ep >> 1)
         }
     }
     
     macro_rules! USB2D_EPBIT {
         ($ep:expr) => {
-            if ($ep == USB_EP_ALL) { 0xFFFFFFFF } else { if USB2D_IS_EP_TX!($ep) { bit!(16) << USB2D_EPIDX!($ep) } else { bit!(0) << USB2D_EPIDX!($ep) } }
+            if ($ep == (UsbEpNum::EP_ALL as u8)) { 0xFFFFFFFF } else { if USB2D_IS_EP_TX!($ep) { bit!(16) << USB2D_EPIDX!($ep) } else { bit!(0) << USB2D_EPIDX!($ep) } }
         }
     }
     
@@ -205,44 +206,44 @@ mod usbd {
     // EpCapabilities
     macro_rules! EPCAP_MAX_PKT {
         ($n:expr) => {
-            ($n << 16)
+            (($n as u32) << 16)
         }
     }
     
     // DtdInfo
     macro_rules! DTD_GETINFO_BYTES {
         ($val:expr) => {
-            ($val >> 16)
+            (($val as u32) >> 16)
         }
     }
     
     macro_rules! INFO_BYTES {
         ($n:expr) => {
-            (($n & 0xFFFF) << 16)
+            ((($n as u32) & 0xFFFF) << 16)
         }
     }
 }
 
 #[repr(u32)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum UsbEpStatus
 {
     // Transfer on the endpoint is completed
-    UsbEpStatus_TxfrComplete = 0,
+    TxfrComplete = 0,
     // Transfer on the endpoint is still active
-    UsbEpStatus_TxfrActive = 1,
+    TxfrActive = 1,
     // Transfer on the endpoint failed
-    UsbEpStatus_TxfrFail = 2,
+    TxfrFail = 2,
     // Endpoint is idle, ready for new data transfers
-    UsbEpStatus_TxfrIdle = 3,
+    TxfrIdle = 3,
     // Endpoint stalled
-    UsbEpStatus_Stalled = 4,
+    Stalled = 4,
     // Endpoint is not configured yet
-    UsbEpStatus_NotConfigured = 5,
+    NotConfigured = 5,
 }
 
 #[repr(i32)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum UsbEpNum
 {
     // Control Out endpoint number, mapped to ep0
@@ -335,6 +336,7 @@ pub enum UsbEpAddress
 
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct UsbSetupPacket
 {
     bmRequestType: u8,
@@ -524,55 +526,6 @@ pub struct UsbDtInterfaceAssociation
     iFunction: u8,
 }
 
-// Endpoint info struct
-pub struct UsbdEndpoint
-{
-    isAssigned: bool,
-    isEnabled: bool,
-    handler: UsbdEpHandler,
-    pDataTransDesc: u64,
-    //UsbTransDesc* pDataTransDesc;
-    epConfigured: u32,
-    bytesRequested: u32,
-    
-    epNum: u8,
-    epAddress: u8,
-    attributes: u8,
-    maxPacketSize: u16,
-    interval: u8,
-}
-
-// Interface info struct
-pub struct UsbdInterface
-{
-    class: u8,
-    subclass: u8,
-    protocol: u8,
-    interfaceNumber: u8,
-    
-    //void* extra_desc_data;
-    //size_t extra_desc_size;
-    
-    associatedNum: u8,
-    
-    numEndpoints: u8,
-    //UsbdEndpoint* endpoints;
-    
-    //UsbdInterface* next;
-}
-
-#[repr(i32)]
-#[derive(Copy, Clone, PartialEq)]
-pub enum UsbdError
-{
-    Success = 0,
-    HwTimeOut = 3,
-}
-
-pub struct UsbdEpHandler
-{
-}
-
 struct UsbPllStruct1
 {
     a: u16,
@@ -631,6 +584,58 @@ const usbPllStruct3Arr: [UsbPllStruct3; 13] =
 
 const usb_pll_related: [u32; 13] = [ 32500, 42000, 0, 0, 48000, 48000, 0, 0, 30000, 60000, 0, 0, 65000 ];
 
+// Endpoint info struct
+pub struct UsbdEndpoint
+{
+    isAssigned: bool,
+    isEnabled: bool,
+    handler: UsbdEpHandler,
+    pDataTransDesc: u64,
+    //UsbTransDesc* pDataTransDesc;
+    epConfigured: bool,
+    bytesRequested: u32,
+    
+    epNum: u8,
+    epAddress: u8,
+    attributes: u8,
+    maxPacketSize: u16,
+    interval: u8,
+}
+
+// Interface info struct
+pub struct UsbdInterface
+{
+    class: u8,
+    subclass: u8,
+    protocol: u8,
+    interfaceNumber: u8,
+    
+    //void* extra_desc_data;
+    //size_t extra_desc_size;
+    
+    associatedNum: u8,
+    
+    numEndpoints: u8,
+    endpointStart: u8,
+    //UsbdEndpoint* endpoints;
+    
+    //UsbdInterface* next;
+}
+
+#[repr(i32)]
+#[derive(Copy, Clone, PartialEq)]
+pub enum UsbdError
+{
+    Success = 0,
+    HwTimeOut = 3,
+    TxferFailed = 26,
+    EpNotConfigured = 28
+}
+
+pub struct UsbdEpHandler
+{
+}
+
 //
 // END TYPES/STRUCTS
 //
@@ -641,7 +646,7 @@ const usbdEndpoint_init: UsbdEndpoint = UsbdEndpoint {
     handler: UsbdEpHandler {},
     pDataTransDesc: 0,
     
-    epConfigured: 0,
+    epConfigured: false,
     bytesRequested: 0,
     epNum: 0,
     epAddress: 0,
@@ -650,11 +655,50 @@ const usbdEndpoint_init: UsbdEndpoint = UsbdEndpoint {
     interval: 0
 };
 
+const usbdCtxt_init: UsbControllerContext = UsbControllerContext {
+    UsbPortSpeed: 0,
+    UsbBaseAddr: 0, // vu32*
+    setupPkt: UsbSetupPacket {
+        bmRequestType: 0,
+        bRequest: 0,
+        wValue: 0,
+        wIndex: 0,
+        wLength: 0
+    },
+    EnumerationDone: false,
+    UsbControllerEnabled: false,
+    UsbConfigurationNo: 0,
+    UsbInterfaceNo: 0,
+    InitializationDone: false
+};
+
 pub struct UsbDevice
 {
     endpoints: [UsbdEndpoint; USBD_EPNUM_MAX],
     initialized: bool,
     usbfCtxt: UsbControllerContext,
+    interfaceCount: u8,
+    interfaces: Vec<UsbdInterface>
+}
+
+impl UsbdInterface
+{
+    pub fn new(num_eps: u8, iface_num: u8) -> Self
+    {
+        let mut retval: UsbdInterface = UsbdInterface {
+            class: 0,
+            subclass: 0,
+            protocol: 0,
+            interfaceNumber: iface_num,
+            
+            associatedNum: 0,
+            
+            numEndpoints: num_eps,
+            endpointStart: 0xFF
+        };
+        
+        return retval;
+    }
 }
 
 impl UsbdEndpoint
@@ -676,11 +720,24 @@ impl UsbdEndpoint
 
 impl UsbDevice
 {
+    pub const fn empty() -> Self
+    {
+        UsbDevice {
+            endpoints: [usbdEndpoint_init; USBD_EPNUM_MAX],
+            initialized: false,
+            usbfCtxt: usbdCtxt_init,
+            interfaceCount: 0,
+            interfaces: Vec::new()
+        }
+    }
+
     pub fn new() -> Self {
         let mut retval: UsbDevice = UsbDevice {
             endpoints: [usbdEndpoint_init; USBD_EPNUM_MAX],
             initialized: false,
-            usbfCtxt: { unsafe { mem::zeroed() } },
+            usbfCtxt: usbdCtxt_init,
+            interfaceCount: 0,
+            interfaces: Vec::new()
         };
         
         return retval;
@@ -721,10 +778,33 @@ impl UsbDevice
     {
         for i in 0..USBD_EPNUM_MAX
         {
-            self.endpoints[i].epConfigured = 0;
+            self.endpoints[i].epConfigured = false;
             self.endpoints[i].bytesRequested = 0;
             ////memset(usbd_endpoints[i].pDataTransDesc, 0, sizeof(UsbTransDesc));
         }  
+    }
+    
+    pub fn ep_alloc(&mut self) -> u8
+    {
+        // Iterate by Tx/Rx pairs and allocate a pair
+        let mut i: usize = USB_EP_CONFIGURABLE_BEGIN as usize;
+        loop
+        {
+            if (i >= USBD_EPNUM_MAX as usize)
+            {
+                break;
+            }
+            
+            if (!self.endpoints[i].isAssigned)
+            {
+                self.endpoints[i].isAssigned = true;
+                self.endpoints[i+1].isAssigned = true;
+                return i as u8;
+            }
+
+            i += 2;
+        }
+        return 0xFF;
     }
     
     pub fn init_context(&mut self)
@@ -737,8 +817,6 @@ impl UsbDevice
         self.usbfCtxt.UsbInterfaceNo = 0;
         self.usbfCtxt.InitializationDone = false;
         self.usbfCtxt.setupPkt = { unsafe { mem::zeroed() } };
-        
-        //usbd_enable_devicemode();
         
         self.endpoints_resetall();
     }
@@ -925,7 +1003,6 @@ impl UsbDevice
         
         if(self.enable_devicemode() != UsbdError::Success)
         {
-            // TODO log
             log("timed out enabling device mode\n\r");
         }
         self.usbfCtxt.EnumerationDone = false;
@@ -1012,30 +1089,82 @@ impl UsbDevice
         return UsbdError::Success;
     }
     
-    pub fn get_ep_queue_head(&mut self) -> u32
+    pub fn get_ep_queue_head_ptr(&mut self, ep_num: u8) -> u32
     {
-        return self.usbfCtxt.UsbBaseAddr + (USB2D_QH_EP_n_OUT*4);
+        return self.usbfCtxt.UsbBaseAddr + (USB2D_QH_EP_n_OUT*4) + (mem::size_of::<UsbDevQueueHead>() * ep_num as usize) as u32;
+    }
+    
+    pub fn get_ep_queue_head(&mut self, ep_num: u8) -> &mut UsbDevQueueHead
+    {
+        let p_queue_head: *mut UsbDevQueueHead = self.get_ep_queue_head_ptr(ep_num) as _;
+        unsafe
+        {
+            let queue_head = &mut *p_queue_head;
+            return queue_head;
+        }
+    }
+    
+    pub fn ep_configure(&mut self, epNum: u8)
+    {
+        let p_epQueue = self.get_ep_queue_head_ptr(epNum);
+        let maxPacketSize = self.endpoints[epNum as usize].maxPacketSize;
+        let epQueue = self.get_ep_queue_head(epNum);
+
+        memset_iou32(p_epQueue as u64, 0, mem::size_of::<UsbDevQueueHead>());
+
+        if (epNum == UsbEpNum::CTRL_OUT as u8) {
+            epQueue.EpCapabilities = EPCAP_IOS; // IRQ on setup
+        }
+        else {
+            epQueue.EpCapabilities = 0;
+        }
+
+        epQueue.NextDTDPtr = 1;
+        epQueue.EpCapabilities |= EPCAP_MAX_PKT!(maxPacketSize & 0x7FF) as u32 | EPCAP_ZLT | EPCAP_HISPEED;
+    }
+    
+    pub fn ep_init(&mut self, epNum: u8)
+    {
+        self.ep_configure(epNum);
+        
+        // Clear type bits and stall bits, enable the endpoint
+        self.and32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), !CTRL_EPT_MASK!(epNum));
+        self.and32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), !CTRL_EPSTALL!(epNum));
+        self.or32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), CTRL_EPENABLE!(epNum));
+        
+        // Configure the endpoing type, hold bulk endpoints in reset
+        if (USB_EPATTR_TTYPE!(self.endpoints[epNum as usize].attributes) == USB_EPATTR_TTYPE_BULK)
+        {
+            self.or32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), CTRL_EPT_BULK!(epNum));
+            self.or32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), CTRL_EPRESET!(epNum));
+        }
+        else if (USB_EPATTR_TTYPE!(self.endpoints[epNum as usize].attributes) == USB_EPATTR_TTYPE_INTR)
+        {
+            self.or32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), CTRL_EPT_INTR!(epNum));
+            self.or32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), CTRL_EPRESET!(epNum));
+        }
+        else if (epNum == UsbEpNum::CTRL_IN as u8 || epNum == UsbEpNum::CTRL_OUT as u8)
+        {
+            self.or32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32), CTRL_EPT_CTRL!(epNum));
+        }
     }
     
     pub fn init_controller(&mut self) -> UsbdError
     {
         self.init_context();
     
-        memset_iou32(self.get_ep_queue_head() as u64, 0, mem::size_of::<UsbDevQueueHead>() * USBD_EPNUM_MAX);
+        memset_iou32(self.get_ep_queue_head_ptr(0) as u64, 0, mem::size_of::<UsbDevQueueHead>() * USBD_EPNUM_MAX);
         for i in 0..USBD_EPNUM_MAX
         {
             memset_iou32(self.endpoints[i].pDataTransDesc, 0, mem::size_of::<UsbTransDesc>());
         }
 
-        let cur_head: u32 = self.get_ep_queue_head();
+        let cur_head: u32 = self.get_ep_queue_head_ptr(0);
         self.w32(USB2D_ASYNCLISTADDR, cur_head);
 
         // Control endpoints are initialized by default for enumeration
-        let usbd_epCtrlOut = &mut self.endpoints[UsbEpNum::CTRL_OUT as usize];
-        usbd_epCtrlOut.ep_init();
-        
-        let usbd_epCtrlIn = &mut self.endpoints[UsbEpNum::CTRL_IN as usize];
-        usbd_epCtrlIn.ep_init();
+        self.ep_init(UsbEpNum::CTRL_OUT as u8);
+        self.ep_init(UsbEpNum::CTRL_IN as u8);
 
         // Disable automatic low-power state
         self.and32(USB2D_HOSTPC1_DEVLC, !DEVLC_AUTOLP);
@@ -1055,37 +1184,308 @@ impl UsbDevice
         
         return UsbdError::HwTimeOut;
     }
+    
+    pub fn create_interface(&mut self, num_eps: u8) -> u8
+    {
+        let ep_num = self.ep_alloc();
+        let mut interface: UsbdInterface = UsbdInterface::new(num_eps, self.interfaceCount);
+        
+        interface.endpointStart = ep_num;
+        self.interfaceCount += 1;
+        
+        let retval: u8 = interface.interfaceNumber;
+        self.interfaces.push(interface);
+        
+        return retval;
+    }
+    
+    pub fn get_interface(&mut self, iface_num: u8) -> &mut UsbdInterface
+    {
+        return &mut self.interfaces[iface_num as usize];
+    }
+    
+    pub fn get_ep(&mut self, ep_num: u8) -> &mut UsbdEndpoint
+    {
+        return &mut self.endpoints[ep_num as usize];
+    }
+    
+    pub fn ep_idle(&mut self, ep_num: u8)
+    {
+        self.ep_flush(ep_num);
+        
+        let queue_head = self.get_ep_queue_head_ptr(ep_num);
+        let ep = &mut self.endpoints[ep_num as usize];
+        
+        memset_iou32(ep.pDataTransDesc, 0, mem::size_of::<UsbTransDesc>());
+        memset_iou32(queue_head as u64, 0, mem::size_of::<UsbDevQueueHead>());
+
+        ep.epConfigured = false;
+        ep.bytesRequested = 0;
+
+        // set endpoint transmit complete event
+        self.or32(USB2D_ENDPTCOMPLETE, USB2D_EPBIT!(ep_num));
+    }
+    
+    pub fn ep_flush(&mut self, epNum: u8) -> UsbdError
+    {
+        self.w32(USB2D_ENDPTFLUSH, USB2D_EPBIT!(epNum)); // epflush
+        for i in 0..100000
+        {
+            timerWait(1);
+            if ( (self.r32(USB2D_ENDPTFLUSH) & USB2D_EPBIT!(epNum)) == 0 )
+            {
+                for j in 0..100000
+                {
+                    timerWait(1);
+                    if ( (self.r32(USB2D_ENDPTSTAT) & USB2D_EPBIT!(epNum)) == 0 )
+                    {
+                        for k in 0..100000
+                        {
+                            timerWait(1);
+                            if ( (self.r32(USB2D_ENDPTPRIME) & USB2D_EPBIT!(epNum)) == 0 )
+                            {
+                                return UsbdError::Success;
+                            }
+                        }
+                        return UsbdError::HwTimeOut;
+                    }
+                }
+                return UsbdError::HwTimeOut;
+            }
+        }
+        return UsbdError::HwTimeOut;
+    }
+    
+    pub fn ep_status(&mut self, epNum: u8) -> UsbEpStatus
+    {
+        let epctrl_val = self.r32(USB2D_ENDPTCTRL!(USB2D_EPIDX!(epNum) as u32));
+
+        if ((epctrl_val & CTRL_EPSTALL!(epNum)) != 0)
+        {
+            return UsbEpStatus::NotConfigured;
+        }
+
+        if ((epctrl_val & CTRL_EPENABLE!(epNum)) == 0)
+        {
+            return UsbEpStatus::NotConfigured;
+        }
+        
+        let queue_head = self.get_ep_queue_head(epNum);
+
+        if ((queue_head.DtdInfo & (INFO_HALTED | INFO_BUFFER_ERROR | INFO_TX_ERROR)) == 0)
+        {
+            if ((self.r32(USB2D_ENDPTPRIME)    & USB2D_EPBIT!(epNum)) != 0
+                || (self.r32(USB2D_ENDPTSTAT) & USB2D_EPBIT!(epNum)) != 0) {
+                return UsbEpStatus::TxfrActive;
+            }
+            else if (self.endpoints[epNum as usize].epConfigured)  {
+                return UsbEpStatus::TxfrComplete;
+            }
+            else {
+                return UsbEpStatus::TxfrIdle;
+            }
+        }
+
+        return UsbEpStatus::TxfrFail;
+    }
+    
+    pub fn usbd_ep_wait(&mut self, epNum: u8) -> UsbdError
+    {
+        let mut retval = self.ep_status(epNum);
+        if (retval == UsbEpStatus::TxfrActive)
+        {
+            for i in 0..1000000
+            {
+                timerWait(1);
+                if (self.ep_status(epNum) != UsbEpStatus::TxfrActive) {
+                    return UsbdError::Success;
+                }
+            }
+            self.ep_idle(epNum);
+            return UsbdError::HwTimeOut;
+        }
+        else if (retval == UsbEpStatus::NotConfigured)
+        {
+            self.ep_idle(epNum);
+            return UsbdError::EpNotConfigured;
+        }
+        else 
+        {
+            retval = self.ep_status(epNum);
+            if (retval != UsbEpStatus::TxfrComplete) {
+                return UsbdError::TxferFailed;
+            }
+        }
+        return UsbdError::Success;
+    }
+    
+    pub fn update_port_speed(&mut self)
+    {
+        let devlc = self.r32(USB2D_HOSTPC1_DEVLC);
+        self.usbfCtxt.UsbPortSpeed = (devlc & USB2D_PSPD_MASK) >> USB2D_PSPD_SHIFT;
+    }
+    
+    pub fn interrupt_en(&mut self)
+    {
+        self.or32(USB2D_USBINTR, (USBSTS_USBINT | USBSTS_USBPORT)); // usb interrupt enable
+    }
+    
+    pub fn is_enumeration_done(&mut self) -> bool
+    {
+        return self.usbfCtxt.EnumerationDone;
+    }
+    
+    pub fn halt_activity(&mut self)
+    {
+        self.usbfCtxt.EnumerationDone = false;
+    
+        // Clear periodic list
+        self.w32(USB2D_PERIODICLISTBASE, 0);
+        
+        // Clear all pending transactions
+        self.echo32(USB2D_ENDPTSETUPSTAT);
+        self.echo32(USB2D_ENDPTCOMPLETE);
+        
+        // Flush all endpoints
+        self.ep_flush(UsbEpNum::EP_ALL as u8);
+        self.endpoints_resetall();
+    }
+    
+    pub fn disconnect(&mut self)
+    {
+        // Kill all transactions
+        self.halt_activity();
+        
+        // Disable pullup on D+ to signal a disconnect to the host
+        self.w32(USB2D_USBCMD, USBCMD_FS2);
+        timerWait(800);
+    }
+    
+    pub fn setup_process_pkt(&mut self, setupPkt: UsbSetupPacket) -> UsbdError
+    {
+        return UsbdError::Success; // TODO
+    }
+    
+    pub fn handle_control_req(&mut self) -> UsbdError
+    {
+        let mut result = UsbdError::Success;
+    
+        let epSetupStat = self.r32(USB2D_ENDPTSETUPSTAT);
+        if ((epSetupStat & bit!(0)) != 0)
+        {
+            self.w32(USB2D_ENDPTSETUPSTAT, epSetupStat);
+
+            let setupBuffer = to_u64ptr!(&self.get_ep_queue_head(UsbEpNum::CTRL_OUT as u8).setupBuffer);
+            memcpy_iou32(to_u64ptr!(&self.usbfCtxt.setupPkt), setupBuffer, mem::size_of::<UsbSetupPacket>());
+            result = self.setup_process_pkt(self.usbfCtxt.setupPkt);
+        }
+        
+        return result;
+    }
+    
+    pub fn handle_endpoints(&mut self) -> UsbdError
+    {
+        return UsbdError::Success; // TODO
+    }
+}
+
+static mut USBD: UsbDevice = UsbDevice::empty();
+
+pub fn get_usbd() -> &'static mut UsbDevice
+{
+    unsafe
+    {
+        &mut USBD
+    }
+}
+
+pub fn irq_usb()
+{
+    let mut result: UsbdError = UsbdError::Success;
+    
+    let usbd = get_usbd();
+
+    // Check status, then write back to clear any pending interrupts
+    let usbSts = usbd.r32(USB2D_USBSTS);
+    usbd.w32(USB2D_USBSTS, usbSts);
+    
+    //if (!(usbSts & 0xFFFF))
+    if (usbSts == 0) {
+        return;
+    }
+    
+    // A USB reset was requested
+    if ((usbSts & USBSTS_USBRST) != 0)
+    {
+        usbd.halt_activity();
+    }
+    
+    // Cable was reinserted
+    if ((usbSts & USBSTS_USBPORT) != 0)
+    {
+        // Initialize USB context
+        usbd.update_port_speed();
+
+        result = usbd.init_controller();
+        if (result != UsbdError::Success) {
+            return;
+        }
+    }
+    
+    // Check for incoming setup packets and handle them
+    result = usbd.handle_control_req();
+    if ((result != UsbdError::Success) && !usbd.is_enumeration_done()) {
+        return;
+    }
+    
+    // Don't talk to endpoints until we're enumerated
+    if (!usbd.is_enumeration_done()) {
+        return;
+    }
+    
+    // Call endpoint handlers as appropriate
+    result = usbd.handle_endpoints();
+    if (result != UsbdError::Success) {
+        return;
+    }
+    
+    return;
 }
 
 pub fn usbd_recover() -> UsbdError
 {
     let mut ret: UsbdError = UsbdError::Success;
-    let mut usbd: UsbDevice = UsbDevice::new();
+    let usbd = get_usbd();
     
+    log("Begin init\n\r");
     usbd.init();
     //cdc_init();
     
+    log("Begin init context\n\r");
     usbd.init_context();
     usbd.enable_clocks();
     usbd.init_controller();
     log ("USB controller initialized...\n\r");
     
-    /*debug_interface = usbd_interface_alloc(2);
-    debug_interface->class = 0xFF;
-    debug_interface->subclass = 0xFF;
-    debug_interface->protocol = 0xFF;
-    usbd_ep_construct(&debug_interface->endpoints[0], 512, USB_EPATTR_TTYPE_BULK, 0);
-    usbd_ep_construct(&debug_interface->endpoints[1], 512, USB_EPATTR_TTYPE_BULK, 0);
-
-    usbd_ep_idle(usbd_get_endpoint_from_epnum(USB_EP_BULK_OUT));
+    let debug_interface_idx: u8 = usbd.create_interface(2);
+    let debug_interface: _ = usbd.get_interface(debug_interface_idx);
+    debug_interface.class = 0xFF;
+    debug_interface.subclass = 0xFF;
+    debug_interface.protocol = 0xFF;
     
-    GetUsbBaseAddress()[USB2D_USBINTR] |= (USBSTS_USBINT | USBSTS_USBPORT); // usb interrupt enable
-    */
+    let ep_bulk0 = debug_interface.endpointStart + 0;
+    let ep_bulk1 = debug_interface.endpointStart + 1;
+    usbd.get_ep(ep_bulk0).ep_construct(512, USB_EPATTR_TTYPE_BULK, 0);
+    usbd.get_ep(ep_bulk1).ep_construct(512, USB_EPATTR_TTYPE_BULK, 0);
     
-    /*while (!GetUsbCtx()->EnumerationDone)
+    usbd.ep_idle(UsbEpNum::BULK_OUT as u8);
+    
+    usbd.interrupt_en();
+    
+    while (!usbd.is_enumeration_done())
     {
         irq_usb();
-    }*/
+    }
 
     return ret;
 }

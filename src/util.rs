@@ -18,6 +18,12 @@ mod util {
             (1 << $a)
         }
     }
+    
+    macro_rules! to_u64ptr {
+        ($a:expr) => {
+            (($a as *const _) as u64)
+        }
+    }
 }
 
 #[inline(always)]
@@ -43,6 +49,19 @@ pub fn memset_iou32(addr: u64, val: u32, len: usize) {
         {
             let mut_reg: *mut u32 = (addr + (i*4) as u64) as _;
             mut_reg.write_volatile(val);
+        }
+    }
+}
+
+#[inline(always)]
+pub fn memcpy_iou32(dst: u64, src: u64, len: usize) {
+    unsafe {
+        for i in 0..(len/4)
+        {
+            let mut_dst: *mut u32 = (dst + (i*4) as u64) as _;
+            let mut_src: *const u32 = (src + (i*4) as u64) as _;
+            let val = mut_src.read_volatile();
+            mut_dst.write_volatile(val);
         }
     }
 }
