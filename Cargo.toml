@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 defmt = "0.2.1"
 synctools = "0.1.0"
+wchar = "0.6.1"
 
 [dependencies.linked_list_allocator]
 default-features = false

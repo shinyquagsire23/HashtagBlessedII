@@ -59,6 +59,86 @@ pub fn logu32(data: u32)
     //uart_a.waitForWrite();
 }
 
+pub fn logu16(data: u16)
+{
+    let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
+    let mut data_shift: u16 = data;
+    
+    for i in 0..4
+    {
+        let nibble: u8 = ((data_shift & 0xF000) >> 12) as u8;
+        
+        let nibble_str = match nibble
+        {
+            0 => "0",
+            1 => "1",
+            2 => "2",
+            3 => "3",
+            4 => "4",
+            5 => "5",
+            6 => "6",
+            7 => "7",
+            8 => "8",
+            9 => "9",
+            10 => "a",
+            11 => "b",
+            12 => "c",
+            13 => "d",
+            14 => "e",
+            15 => "f",
+            _ => "",
+        };
+        
+        uart_a.writeStr(nibble_str);
+        
+        data_shift <<= 4;
+    }
+    
+    uart_a.writeStr("\n\r");
+    
+    //uart_a.waitForWrite();
+}
+
+pub fn logu8(data: u8)
+{
+    let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
+    let mut data_shift: u8 = data;
+    
+    for i in 0..2
+    {
+        let nibble: u8 = ((data_shift & 0xF0) >> 4) as u8;
+        
+        let nibble_str = match nibble
+        {
+            0 => "0",
+            1 => "1",
+            2 => "2",
+            3 => "3",
+            4 => "4",
+            5 => "5",
+            6 => "6",
+            7 => "7",
+            8 => "8",
+            9 => "9",
+            10 => "a",
+            11 => "b",
+            12 => "c",
+            13 => "d",
+            14 => "e",
+            15 => "f",
+            _ => "",
+        };
+        
+        uart_a.writeStr(nibble_str);
+        
+        data_shift <<= 4;
+    }
+    
+    uart_a.writeStr("\n\r");
+    
+    //uart_a.waitForWrite();
+}
+
 #[defmt::global_logger]
 struct Logger;
 

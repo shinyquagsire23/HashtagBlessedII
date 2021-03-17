@@ -19,9 +19,9 @@ pub fn timerGetTick() -> u32 {
 
 pub fn timerWait(uSecs: u32)
 {
-    let end: u64 = (peek32(TIMERUS_CNTR_1US_ADDR) as u64 + uSecs as u64);
+    let end: u64 = (timerGetTick() as u64 + uSecs as u64);
     
     loop {
-        if ((peek32(TIMERUS_CNTR_1US_ADDR) as u64) < end) { break };
+        if ((timerGetTick() as u64) < end) { break };
     }
 }
