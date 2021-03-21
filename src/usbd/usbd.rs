@@ -749,7 +749,8 @@ pub struct UsbDevice
     interfaceCount: u8,
     interfaces: Vec<UsbdInterface>,
     usbDeviceStatus: u16,
-    setup_handlers: Vec<fn(&mut UsbDevice, UsbSetupPacket)->bool>
+    setup_handlers: Vec<fn(&mut UsbDevice, UsbSetupPacket)->bool>,
+    reset_handlers: Vec<fn(&mut UsbDevice)>
 }
 
 impl UsbdInterface
@@ -798,6 +799,7 @@ impl UsbDevice
             interfaces: Vec::new(),
             usbDeviceStatus: 0,
             setup_handlers: Vec::new(),
+            reset_handlers: Vec::new(),
         }
     }
 
@@ -810,6 +812,7 @@ impl UsbDevice
             interfaces: Vec::new(),
             usbDeviceStatus: 0,
             setup_handlers: Vec::new(),
+            reset_handlers: Vec::new(),
         };
         
         return retval;
@@ -2032,6 +2035,14 @@ impl UsbDevice
         self.setup_handlers.remove(handler);
     }
     
+    pub fn register_reset_hook(&mut self, handler: fn(&mut UsbDevice)) -> usize
+    {
+        let retval = self.reset_handlers.len();
+        self.reset_handlers.push(handler);
+        
+        return retval;
+    }
+    
     pub fn setup_getdata(&mut self, dst: u64, len: u16) -> UsbdError
     {
         let result = self.ep_txfer_start(UsbEpNum::CTRL_OUT as u8, len as usize, true);
@@ -2108,6 +2119,12 @@ pub fn irq_usb()
     {
         log("usbd: reset requested\n\r");
         usbd.halt_activity();
+        
+        // Run through reset handlers
+        for i in 0..usbd.reset_handlers.len()
+        {
+            usbd.reset_handlers[i](usbd);
+        }
     }
     
     // Cable was reinserted

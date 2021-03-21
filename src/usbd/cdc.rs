@@ -355,6 +355,16 @@ pub fn cdc_setup_hook(usbd: &mut UsbDevice, pkt: UsbSetupPacket) -> bool
     return false;
 }
 
+pub fn cdc_reset_hook(usbd: &mut UsbDevice)
+{
+    let cdc = get_cdc();
+    
+    cdc.isactive = false;
+    cdc.enabled = false;
+    cdc.lineState = 0;
+    cdc.cmd_buf.clear();
+}
+
 pub fn get_cdc() -> &'static mut CdcGadget
 {
     unsafe
@@ -436,6 +446,8 @@ pub fn cdc_init()
 
     //mutexInit(&cdc_send_mutex);
     //mutexInit(&cdc_usb_mutex);
+    
+    usbd.register_reset_hook(cdc_reset_hook);
 }
 
 pub fn cdc_fini()

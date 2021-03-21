@@ -99,7 +99,10 @@ pub extern "C" fn main_cold()
     
     logln("Done init!");
 
-    loop {timerWait(1);}
+    loop {
+        timerWait(1000000);
+        logln("beep");
+    }
 }
 
 #[no_mangle]
