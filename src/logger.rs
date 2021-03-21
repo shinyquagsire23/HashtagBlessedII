@@ -6,17 +6,38 @@
 
 use core::ptr::NonNull;
 use crate::io::uart::*;
+use crate::usbd::usbd::*;
+use crate::usbd::cdc::*;
 
 pub fn logger_init()
 {
     
 }
 
-pub fn log(data: &str)
+pub fn log_uarta(data: &str)
 {
     let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
     uart_a.writeStr(data);
     //uart_a.waitForWrite();
+}
+
+pub fn log_usb(data: &str)
+{
+    let usbd = get_usbd();
+
+    cdc_send(usbd, data.as_bytes(), data.len());
+}
+
+pub fn log(data: &str)
+{
+    log_uarta(data);
+    log_usb(data);
+}
+
+pub fn logln(data: &str)
+{
+    log(data);
+    log("\n\r");
 }
 
 pub fn logu32(data: u32)

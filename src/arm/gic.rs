@@ -234,6 +234,11 @@ impl GICCRegs
         return retval;
     }
     
+    pub fn getHPPIR(&mut self) -> u32
+    {
+        return self.GICC_HPPIR.r32();
+    }
+    
     pub fn enableEIO(&mut self)
     {
         self.GICC_CTLR |= (bit!(0) | bit!(9));
@@ -367,5 +372,55 @@ impl GIC
     pub fn enableInterrupt(&mut self, num: u16, core: u8)
     {
         self.gicd.enableInterrupt(num, core);
+    }
+    
+    pub fn getIntId(&mut self) -> u16
+    {
+        return (self.gicc.getHPPIR() & 0x3FF) as u16;
+    }
+    
+    pub fn getIntVCPU(&mut self) -> u8
+    {
+        return ((self.gicc.getHPPIR() >> 10) & 0x3) as u8;
+    }
+    
+    pub fn getRPR(&mut self) -> u8
+    {
+        return (self.gicc.GICC_RPR.r32() & 0xFF) as u8;
+    }
+    
+    pub fn getVRPR(&mut self) -> u8
+    {
+        return (self.gicv.GICV_RPR.r32() & 0xFF) as u8;
+    }
+    
+    pub fn getIAR(&mut self) -> u32
+    {
+        return (self.gicc.GICC_IAR.r32());
+    }
+    
+    pub fn getIARVCPU(&mut self) -> u32
+    {
+        return (self.getIAR() >> 10) & 0x7;
+    }
+    
+    pub fn getIARIntId(&mut self) -> u16
+    {
+        return (self.getIAR() & 0x3FF) as u16; // TODO IAR_IRQ_MASK
+    }
+    
+    pub fn set_GICH_VMCR(&mut self)
+    {
+        self.gich.GICH_VMCR.or32(bit!(0));
+    }
+    
+    pub fn setEIOR(&mut self, val: u32)
+    {
+        self.gicc.GICC_EOIR.w32(val);
+    }
+    
+    pub fn setDIR(&mut self, val: u32)
+    {
+        self.gicc.GICC_DIR.w32(val);
     }
 }

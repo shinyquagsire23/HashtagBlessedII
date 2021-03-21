@@ -185,6 +185,14 @@ impl MMIOReg
         }
     }
     
+    pub fn or32(&mut self, val: u32) {
+        *self |= val;
+    }
+    
+    pub fn and32(&mut self, val: u32) {
+        *self &= val;
+    }
+    
     pub fn r8(&self) -> u8 {
         unsafe
         {

@@ -28,8 +28,6 @@ pub const IRQ_PPI_START: u16 = (16);
 // Shared peripheral interrupts, these map to the Tegra indices
 pub const IRQ_SPI_START: u16 = (32);
 
-//pub const IRQ_IS_SGI(irqnum) ((u16)(irqnum & IRQ_MAX) < IRQ_PPI_START)
-
 // List register bits
 pub const LR_INVALID_SLOT: u32 = (0xFF);
 pub const LR_HWINT:        u32 = (bit!(31));
@@ -47,6 +45,11 @@ pub const GICH_INT_NP:  u32 = (bit!(3)); // no pending LRs
 pub const GICH_INT_U:   u32 = (bit!(1)); // underflow
 pub const GICH_INT_EOI: u32 = (bit!(0)); // end of interrupt IRQ
 
+pub fn tegra_irq_is_sgi(irqnum: u16) -> bool
+{
+    return ((irqnum & IRQ_MAX) < IRQ_PPI_START);
+}
+
 pub fn tegra_irq_en(id: i32)
 {
     let set: i32 = (id / ICTLR_BITS) + ICTLR_MIN;
@@ -59,4 +62,19 @@ pub fn tegra_irq_en(id: i32)
     
     let mut ictlr: ICTLRSet = ICTLRSet::new(set);
     ictlr.irq_en(bit);
+}
+
+pub fn tegra_irq_ack(id: i32)
+{
+    let set: i32 = (id / ICTLR_BITS) + ICTLR_MIN;
+    let bit: i32 = id % ICTLR_BITS;
+
+    if(set > ICTLR_MAX)
+    {
+        return;
+    }
+
+
+    let mut ictlr: ICTLRSet = ICTLRSet::new(set);
+    ictlr.irq_ack(bit);
 }

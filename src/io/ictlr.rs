@@ -136,4 +136,9 @@ impl ICTLRSet
         self.ICTLR_CPU3_IEP_CLASS &= !bit!(bit);
         self.ICTLR_CPU3_IER_SET &= !bit!(bit);
     }
+    
+    pub fn irq_ack(&mut self, bit: i32)
+    {
+        self.ICTLR_FIR_CLR.w32(bit!(bit));
+    }
 }

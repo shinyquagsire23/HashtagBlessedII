@@ -16,6 +16,7 @@ use core::mem;
 use defmt::info;
 use alloc::vec::Vec;
 use wchar::{wch, wch_c};
+use crate::usbd::cdc::*;
 
 pub const USB2D_BASE: u32 = (0x7D000000);
 
@@ -103,11 +104,11 @@ pub const USBD_CTRL_PKT_MAX:     u16 = (64);
 pub const USB_EPATTR_TTYPE_BULK: u8 = (2);
 pub const USB_EPATTR_TTYPE_INTR: u8 = (3);
 
-pub const CS_INTERFACE:  u32 = 0x24;
-pub const USB_ST_HEADER: u32 = 0x00;
-pub const USB_ST_CMF:    u32 = 0x01;
-pub const USB_ST_ACMF:   u32 = 0x02;
-pub const USB_ST_UF:     u32 = 0x06;
+pub const CS_INTERFACE:  u8 = 0x24;
+pub const USB_ST_HEADER: u8 = 0x00;
+pub const USB_ST_CMF:    u8 = 0x01;
+pub const USB_ST_ACMF:   u8 = 0x02;
+pub const USB_ST_UF:     u8 = 0x06;
 
 pub const USBD_XFERBUF_SIZE: u32 = (0x1000);
 
@@ -335,11 +336,11 @@ pub enum UsbEpAddress
 #[derive(Copy, Clone)]
 pub struct UsbSetupPacket
 {
-    bmRequestType: u8,
-    bRequest: u8,
-    wValue: u16,
-    wIndex: u16,
-    wLength: u16
+    pub bmRequestType: u8,
+    pub bRequest: u8,
+    pub wValue: u16,
+    pub wIndex: u16,
+    pub wLength: u16
 }
 
 #[repr(C)]
@@ -395,131 +396,131 @@ pub const INFO_TX_ERROR:     u32 = (bit!(3));
 #[repr(C)]
 pub struct UsbDtDevice
 {
-    bLength: u8,
-    bDescriptorType: u8,
-    bcdUsb: u16,
-    bDeviceClass: u8,
-    bDeviceSubclass: u8,
-    bDeviceProtocol: u8,
-    bMaxPacketSize: u8,
-    idVendor: u16,
-    idProduct: u16,
-    bcdDevice: u16,
-    iManufacturer: u8,
-    iProduct: u8,
-    iSerialNumber: u8,
-    bNumConfigurations: u8,
+    pub bLength: u8,
+    pub bDescriptorType: u8,
+    pub bcdUsb: u16,
+    pub bDeviceClass: u8,
+    pub bDeviceSubclass: u8,
+    pub bDeviceProtocol: u8,
+    pub bMaxPacketSize: u8,
+    pub idVendor: u16,
+    pub idProduct: u16,
+    pub bcdDevice: u16,
+    pub iManufacturer: u8,
+    pub iProduct: u8,
+    pub iSerialNumber: u8,
+    pub bNumConfigurations: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtString
 {
-    bLength: u8,
-    bDescriptorType: u8,
-    data: [u16; 0x1F] // packets are max 0x40 here so just alloc up to that
+    pub bLength: u8,
+    pub bDescriptorType: u8,
+    pub data: [u16; 0x1F] // packets are max 0x40 here so just alloc up to that
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtConfig
 {
-    bLength: u8,
-    bDescriptorType: u8,
-    wTotalLength: u16,
-    bNumInterfaces: u8,
-    bConfigurationValue: u8,
-    iConfiguration: u8,
-    bmAttributes: u8,
-    bMaxPower: u8,
+    pub bLength: u8,
+    pub bDescriptorType: u8,
+    pub wTotalLength: u16,
+    pub bNumInterfaces: u8,
+    pub bConfigurationValue: u8,
+    pub iConfiguration: u8,
+    pub bmAttributes: u8,
+    pub bMaxPower: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtInterface
 {
-    bLength: u8,
-    bDescriptorType: u8,
-    bInterfaceNumber: u8,
-    bAlternateSetting: u8,
-    bNumEndpoints: u8,
-    bInterfaceClass: u8,
-    bInterfaceSubclass: u8,
-    bInterfaceProtocol: u8,
-    iInterface: u8,
+    pub bLength: u8,
+    pub bDescriptorType: u8,
+    pub bInterfaceNumber: u8,
+    pub bAlternateSetting: u8,
+    pub bNumEndpoints: u8,
+    pub bInterfaceClass: u8,
+    pub bInterfaceSubclass: u8,
+    pub bInterfaceProtocol: u8,
+    pub iInterface: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtEndpoint
 {
-    bLength: u8,
-    bDescriptorType: u8,
-    bEndpointAddress: u8,
-    bmAttributes: u8,
-    wMaxPacketSize: u16,
-    bInterval: u8,
+    pub bLength: u8,
+    pub bDescriptorType: u8,
+    pub bEndpointAddress: u8,
+    pub bmAttributes: u8,
+    pub wMaxPacketSize: u16,
+    pub bInterval: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtClassHeaderFunc
 {
-    bFunctionLength: u8,
-    bDescriptorType: u8,
-    bDescriptorSubtype: u8,  /* 0x00 */
-	bcdCDC: u16,
+    pub bFunctionLength: u8,
+    pub bDescriptorType: u8,
+    pub bDescriptorSubtype: u8,  /* 0x00 */
+    pub bcdCDC: u16,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtClassCallMgmt
 {
-    bFunctionLength: u8,
-    bDescriptorType: u8,
-    bDescriptorSubtype: u8,	/* 0x01 */
-    bmCapabilities: u8,
-    bDataInterface: u8,
+    pub bFunctionLength: u8,
+    pub bDescriptorType: u8,
+    pub bDescriptorSubtype: u8,	/* 0x01 */
+    pub bmCapabilities: u8,
+    pub bDataInterface: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtClassAbstractControl
 {
-    bFunctionLength: u8,
-    bDescriptorType: u8,
-    bDescriptorSubtype: u8,	/* 0x02 */
-    bmCapabilities: u8,
+    pub bFunctionLength: u8,
+    pub bDescriptorType: u8,
+    pub bDescriptorSubtype: u8,	/* 0x02 */
+    pub bmCapabilities: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtClassUnionFunction
 {
-    bFunctionLength: u8,
-    bDescriptorType: u8,
-    bDescriptorSubtype: u8,	/* 0x06 */
-    bMasterInterface: u8,
-    bSlaveInterface0: u8,
+    pub bFunctionLength: u8,
+    pub bDescriptorType: u8,
+    pub bDescriptorSubtype: u8,	/* 0x06 */
+    pub bMasterInterface: u8,
+    pub bSlaveInterface0: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtDeviceQualifier
 {
-    bLength: u8,
-    bDescriptorType: u8,
-    bcdUsb: u16,
-    bDeviceClass: u8,
-    bDeviceSubclass: u8,
-    bDeviceProtocol: u8,
-    bMaxPacketSize0: u8,
-    bNumConfigurations: u8,
-    bReserved: u8,
+    pub bLength: u8,
+    pub bDescriptorType: u8,
+    pub bcdUsb: u16,
+    pub bDeviceClass: u8,
+    pub bDeviceSubclass: u8,
+    pub bDeviceProtocol: u8,
+    pub bMaxPacketSize0: u8,
+    pub bNumConfigurations: u8,
+    pub bReserved: u8,
 }
 
 #[repr(C, packed(1))]
 pub struct UsbDtInterfaceAssociation
 {
-    bLength: u8,
-    bDescriptorType: u8,
-    bFirstInterface: u8,
-    bInterfaceCount: u8,
-    bFunctionClass: u8,
-    bFunctionSubclass: u8,
-    bFunctionProtocol: u8,
-    iFunction: u8,
+    pub bLength: u8,
+    pub bDescriptorType: u8,
+    pub bFirstInterface: u8,
+    pub bInterfaceCount: u8,
+    pub bFunctionClass: u8,
+    pub bFunctionSubclass: u8,
+    pub bFunctionProtocol: u8,
+    pub iFunction: u8,
 }
 
 struct UsbPllStruct1
@@ -659,36 +660,36 @@ const deviceQualifierDesc: UsbDtDeviceQualifier = UsbDtDeviceQualifier
 // Endpoint info struct
 pub struct UsbdEndpoint
 {
-    isAssigned: bool,
-    isEnabled: bool,
-    handler: UsbdEpHandler,
-    pDataTransDesc: u64,
+    pub isAssigned: bool,
+    pub isEnabled: bool,
+    pub handler: Option<fn(&mut UsbDevice, u8)>,
+    pub pDataTransDesc: u64,
     //UsbTransDesc* pDataTransDesc;
-    epConfigured: bool,
-    bytesRequested: u32,
+    pub epConfigured: bool,
+    pub bytesRequested: u32,
     
-    epNum: u8,
-    epAddress: u8,
-    attributes: u8,
-    maxPacketSize: u16,
-    interval: u8,
+    pub epNum: u8,
+    pub epAddress: u8,
+    pub attributes: u8,
+    pub maxPacketSize: u16,
+    pub interval: u8,
 }
 
 // Interface info struct
 pub struct UsbdInterface
 {
-    class: u8,
-    subclass: u8,
-    protocol: u8,
-    interfaceNumber: u8,
+    pub class: u8,
+    pub subclass: u8,
+    pub protocol: u8,
+    pub interfaceNumber: u8,
     
-    //void* extra_desc_data;
-    //size_t extra_desc_size;
+    pub extra_desc_data: u64,
+    pub extra_desc_size: usize,
     
-    associatedNum: u8,
+    pub associatedNum: u8,
     
-    numEndpoints: u8,
-    endpointStart: u8,
+    pub numEndpoints: u8,
+    pub endpointStart: u8,
     //UsbdEndpoint* endpoints;
     
     //UsbdInterface* next;
@@ -704,10 +705,6 @@ pub enum UsbdError
     EpNotConfigured = 28
 }
 
-pub struct UsbdEpHandler
-{
-}
-
 //
 // END TYPES/STRUCTS
 //
@@ -715,7 +712,7 @@ pub struct UsbdEpHandler
 const usbdEndpoint_init: UsbdEndpoint = UsbdEndpoint {
     isAssigned: false,
     isEnabled: false,
-    handler: UsbdEpHandler {},
+    handler: None,
     pDataTransDesc: 0,
     
     epConfigured: false,
@@ -752,6 +749,7 @@ pub struct UsbDevice
     interfaceCount: u8,
     interfaces: Vec<UsbdInterface>,
     usbDeviceStatus: u16,
+    setup_handlers: Vec<fn(&mut UsbDevice, UsbSetupPacket)->bool>
 }
 
 impl UsbdInterface
@@ -763,6 +761,8 @@ impl UsbdInterface
             subclass: 0,
             protocol: 0,
             interfaceNumber: iface_num,
+            extra_desc_data: 0,
+            extra_desc_size: 0,
             
             associatedNum: 0,
             
@@ -797,6 +797,7 @@ impl UsbDevice
             interfaceCount: 0,
             interfaces: Vec::new(),
             usbDeviceStatus: 0,
+            setup_handlers: Vec::new(),
         }
     }
 
@@ -808,6 +809,7 @@ impl UsbDevice
             interfaceCount: 0,
             interfaces: Vec::new(),
             usbDeviceStatus: 0,
+            setup_handlers: Vec::new(),
         };
         
         return retval;
@@ -825,7 +827,7 @@ impl UsbDevice
             let i_u8: u8 = (i & 0xFF) as u8;
             self.endpoints[i].isAssigned = false;
             self.endpoints[i].isEnabled = false;
-            self.endpoints[i].handler = UsbdEpHandler { };
+            self.endpoints[i].handler = None;
             
             self.endpoints[i].epNum = i_u8;
             self.endpoints[i].epAddress = USB2D_EPNUM_TO_EPADDR!(i_u8);
@@ -1394,8 +1396,8 @@ impl UsbDevice
                 }
             }
             
-            log("usbd: Transfer active, but timed out!! ");
-            logu32(self.ep_status(epNum) as u32);
+            //log_uarta("usbd: Transfer active, but timed out!! \n\r");
+            //logu32(self.ep_status(epNum) as u32);
             
             if (self.ep_status(epNum) != UsbEpStatus::TxfrIdle) {
                 self.ep_idle(epNum);
@@ -1497,14 +1499,14 @@ impl UsbDevice
         return 0;
     }
 
-    pub fn xferbuf_flush(&mut self, epNum: u8, len: u16)
+    pub fn xferbuf_flush(&mut self, epNum: u8, len: usize)
     {
         let xferbuf = self.get_xferbuf(epNum);
         //if (xferbuf)
         //    dcache_flush(xferbuf, len);
     }
 
-    pub fn xferbuf_invalidate(&mut self, epNum: u8, len: u16)
+    pub fn xferbuf_invalidate(&mut self, epNum: u8, len: usize)
     {
         let xferbuf = self.get_xferbuf(epNum);
         //if (xferbuf)
@@ -1695,11 +1697,11 @@ impl UsbDevice
             dtInter.iInterface = 0; //TODO strings? idk
             
             // TODO?
-            /*if (iter.extra_desc_data)
+            if (iter.extra_desc_data != 0)
             {
                 memcpy_iou32(config_cur, iter.extra_desc_data, iter.extra_desc_size);
-                config_cur += iter.extra_desc_size;
-            }*/
+                config_cur += iter.extra_desc_size as u64;
+            }
             
             dtInter.bNumEndpoints = 0;
             for j in 0..iter.numEndpoints
@@ -1796,14 +1798,13 @@ impl UsbDevice
 
         // Run through setup handlers; If one of them has a valid response,
         // then return it, otherwise the defaults following this will run.
-        /*for i in 0..USBD_MAX_SETUP_HANDLERS
+        for i in 0..self.setup_handlers.len()
         {
-            if (_setup_handlers[i] != NULL)
-            {
-                if (_setup_handlers[i](pkt))
-                    return NvBootError_Success;
+            let handlerRet = self.setup_handlers[i](self, pkt);
+            if (handlerRet) {
+                return UsbdError::Success;
             }
-        }*/
+        }
         
         //log("Process setup\n\r");
         //logu8(pkt.bmRequestType);
@@ -1824,7 +1825,9 @@ impl UsbDevice
             }
             else if (pkt.bRequest == DeviceRequestTypes::SET_CONFIGURATION as u8)
             {
+                log("...?\n");
                 let result = self.ep_txfer_start(UsbEpNum::CTRL_IN as u8, 0, true);
+                logu32(result as u32);
                 if (result == UsbdError::Success)
                 {
                     self.usbfCtxt.UsbConfigurationNo = (pkt.wValue & 0xFF) as u8;
@@ -1979,7 +1982,99 @@ impl UsbDevice
     
     pub fn handle_endpoints(&mut self) -> UsbdError
     {
-        return UsbdError::Success; // TODO
+        // Iterate by Tx/Rx pairs and allocate a pair
+        let mut i: usize = USB_EP_CONFIGURABLE_BEGIN as usize;
+        loop
+        {
+            if (i >= USBD_EPNUM_MAX as usize)
+            {
+                break;
+            }
+            
+            if (self.endpoints[i].isEnabled 
+                && self.ep_status(i as u8) == UsbEpStatus::TxfrComplete)
+            {
+                match (self.endpoints[i].handler)
+                {
+                    Some(p) => {
+                        p(self, i as u8);
+                        self.ep_idle(i as u8);
+                    },
+                    None => {}
+                }
+            }
+
+            i += 1;
+        }
+        return UsbdError::Success;
+    }
+    
+    pub fn register_handler(&mut self, epNum: u8, handler: fn(&mut UsbDevice, u8))
+    {
+        self.endpoints[epNum as usize].handler = Some(handler);
+    }
+    
+    pub fn remove_handler(&mut self, epNum: u8)
+    {
+        self.endpoints[epNum as usize].handler = None;
+    }
+    
+    pub fn register_setup_hook(&mut self, handler: fn(&mut UsbDevice, UsbSetupPacket)->bool) -> usize
+    {
+        let retval = self.setup_handlers.len();
+        self.setup_handlers.push(handler);
+        
+        return retval;
+    }
+    
+    pub fn remove_setup_hook(&mut self, handler: usize)
+    {
+        self.setup_handlers.remove(handler);
+    }
+    
+    pub fn setup_getdata(&mut self, dst: u64, len: u16) -> UsbdError
+    {
+        let result = self.ep_txfer_start(UsbEpNum::CTRL_OUT as u8, len as usize, true);
+        if (dst != 0) {
+            memcpy_iou32(dst, self.get_xferbuf(UsbEpNum::CTRL_OUT as u8), len as usize);
+        }
+        
+        return result;
+    }
+    
+    pub fn ep_tx(&mut self, endpoint: u8, buf: u64, len: usize, sync: bool) -> UsbdError
+    {
+        let mut _len = len;
+        if (_len > USBD_XFERBUF_SIZE as usize) {
+            _len = USBD_XFERBUF_SIZE as usize;
+        }
+
+        memcpy_iou32(self.get_xferbuf(endpoint), buf, _len);
+        self.xferbuf_flush(endpoint, _len);
+
+        return self.ep_txfer_start(endpoint, _len, sync);
+    }
+    
+    pub fn ep_rx(&mut self, endpoint: u8, buf: u64, len: usize, sync: bool) -> UsbdError
+    {
+        let mut result = UsbdError::Success;
+
+        let mut _len = len;
+        if (_len > USBD_XFERBUF_SIZE as usize) {
+            _len = USBD_XFERBUF_SIZE as usize;
+        }
+
+        memset_iou32(buf, 0, _len);
+
+        result = self.ep_txfer_start(endpoint, _len, sync);
+
+        if (result == UsbdError::Success && sync)
+        {
+            self.xferbuf_invalidate(endpoint, _len);
+            memcpy_iou32(buf, self.get_xferbuf(endpoint), self.get_bytes_received(endpoint) as usize);
+        }
+
+        return result;
     }
 }
 
@@ -2056,7 +2151,7 @@ pub fn usbd_recover() -> UsbdError
     
     log("usbd: Begin init\n\r");
     usbd.init();
-    //cdc_init();
+    cdc_init();
     
     log("usbd: Begin init context\n\r");
     usbd.init_context();
@@ -2079,10 +2174,11 @@ pub fn usbd_recover() -> UsbdError
     
     usbd.interrupt_en();
     
-    loop //while (!usbd.is_enumeration_done())
+    while (!usbd.is_enumeration_done())
     {
         irq_usb();
     }
+    log("Enumeration complete!\n\r");
 
     return ret;
 }

@@ -32,3 +32,12 @@ pub fn get_fipa_el2() -> u64
         return (get_hpfar_el2() << 8) | (get_far_el2() & 0xFFF);
     }
 }
+
+#[inline(always)]
+pub fn getELREL2() -> u64
+{
+    unsafe
+    {
+        return get_elr_el2();
+    }
+}
