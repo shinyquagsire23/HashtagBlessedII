@@ -38,7 +38,7 @@ SECTIONS
     __text_end = . ;
     __data_start = . ;
     
-    .data ALIGN(4) :    {
+    .data ALIGN(16) :    {
         
         *(.data)
         *(.data.*)
@@ -93,7 +93,6 @@ SECTIONS
         
         *(COMMON)
         CONSTRUCTORS
-        
         
         . = ALIGN(4);    /* REQUIRED. LD is flaky without it. */
     } >ram = 0xff
@@ -161,6 +160,8 @@ SECTIONS
     .debug_funcnames 0 : { *(.debug_funcnames) }
     .debug_typenames 0 : { *(.debug_typenames) }
     .debug_varnames  0 : { *(.debug_varnames) }
+    
+    .defmt 0 : {  }
     
     /* These must appear regardless of  .  */
 }

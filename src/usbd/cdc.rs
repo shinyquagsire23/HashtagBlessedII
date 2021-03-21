@@ -135,7 +135,7 @@ pub fn cdc_process_cmd()
     let cmd_conv = str::from_utf8(&cmd_u8);
     if (cmd_conv.is_err())
     {
-        logln("> Failed to parse input to UTF-8!");
+        println!("> Failed to parse input to UTF-8!");
         return;
     }
     let cmd = cmd_conv.unwrap();
@@ -151,9 +151,7 @@ pub fn cdc_process_cmd()
     }
     else
     {
-        log("> Unknown command `");
-        log(cmd);
-        logln("`");
+        println!("> Unknown command `{}`", cmd);
     }
     
     cdc.cmd_buf.clear();

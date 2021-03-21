@@ -17,7 +17,9 @@
 #![feature(const_fn_fn_ptr_basics)]
 #![feature(const_mut_refs)]
 
+#[macro_use]
 extern crate alloc;
+
 mod heap;
 
 use heap::HtbHeap;
@@ -86,29 +88,34 @@ pub extern "C" fn main_cold()
 
     //vmmio_init();
     //vsvc_init();
+    
+    println!("example {:.1} test {:x} words {}", 1, 2, 3);
 
     usbd_recover();
     gic.enableInterrupt(IRQ_T210_USB, 0);
     tegra_irq_en(IRQNUM_T210_USB as i32);
     
-    log("\n\r\n\r\n\rWaddup from EL2!\n\r");
+    println!("");
+    println!("");
+    println!("");
+    println!("Waddup from EL2!");
     
-    log("Wait for CDC\n\r");
+    println!("Wait for CDC");
     while (!cdc_active()){timerWait(1);}
     cdc_enable();
     
-    logln("Done init!");
+    println!("Done init!");
 
     loop {
         timerWait(1000000);
-        logln("beep");
+        println!("beep");
     }
 }
 
 #[no_mangle]
 pub extern "C" fn exception_handle() 
 {
-    log("exception?\n\r");
+    println!("exception?");
     timerWait(1000000);
     loop {}
 }
@@ -286,22 +293,18 @@ pub extern "C" fn irq_handle()  -> u64
 
 #[panic_handler]
 fn on_panic(panic_info: &PanicInfo) -> ! {
-    log("panic?\n\r");
-    if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-        log(s);
-        log("\n\r");
+    println!("panic?");
+    println!("{}", panic_info);
+    /*if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+        println!(s);
     } else {
-        log("Couldn't get error info!\n\r");
+        println!("Couldn't get error info!");
     }
     if let Some(location) = panic_info.location() {
-       log("panic occurred in file '");
-       log(location.file());
-       log("' at line ");
-       logu32(location.line());
-       log("\n\r");
+       println!("panic occurred in file '{}' at line {}", location.file(), location.line());
     } else {
-        log("panic occurred but can't get location information...\n\r");
-    }
+        println!("panic occurred but can't get location information...");
+    }*/
     timerWait(1000000);
     loop {}
 }

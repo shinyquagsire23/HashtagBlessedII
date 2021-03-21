@@ -13,7 +13,6 @@ use crate::io::timer::*;
 use crate::io::pmc::*;
 use crate::logger::*;
 use core::mem;
-use defmt::info;
 use alloc::vec::Vec;
 use wchar::{wch, wch_c};
 use crate::usbd::cdc::*;
@@ -1077,7 +1076,7 @@ impl UsbDevice
         
         if(self.enable_devicemode() != UsbdError::Success)
         {
-            log("usbd: timed out enabling device mode\n\r");
+            println!("usbd: timed out enabling device mode");
         }
         self.usbfCtxt.EnumerationDone = false;
     }
@@ -1099,7 +1098,7 @@ impl UsbDevice
         
         if (timed_out)
         {
-            log("usbd: clock is invalid\n\r");
+            println!("usbd: clock is invalid");
             return UsbdError::HwTimeOut;
         }
         
@@ -1120,7 +1119,7 @@ impl UsbDevice
 
         if (timed_out)
         {
-            //printf("usbcmd rst failed\n\r");
+            //printf("usbcmd rst failed");
             return UsbdError::HwTimeOut;
         }
 
@@ -1134,7 +1133,7 @@ impl UsbDevice
         
         if (timed_out)
         {
-            log("usbd: clock is invalid 2\n\r");
+            println!("usbd: clock is invalid 2");
             return UsbdError::HwTimeOut;
         }
         
@@ -1149,7 +1148,7 @@ impl UsbDevice
         
         if (timed_out)
         {
-            log("usbd: not in device mode\n\r");
+            println!("usbd: not in device mode");
             return UsbdError::HwTimeOut;
         }
         
@@ -1266,7 +1265,7 @@ impl UsbDevice
             }
         }
         
-        log("usbd: Controller init timed out!!\n\r");
+        println!("usbd: Controller init timed out!!");
         return UsbdError::HwTimeOut;
     }
     
@@ -1296,9 +1295,9 @@ impl UsbDevice
     
     pub fn ep_idle(&mut self, ep_num: u8)
     {
-        //log("usbd: ep idle...\n\r");
+        //println!("usbd: ep idle...");
         self.ep_flush(ep_num);
-        //log("usbd: ep idle flushed...\n\r");
+        //println!("usbd: ep idle flushed...");
         timerWait(100);
         
         let queue_head = self.get_ep_queue_head_ptr(ep_num);
@@ -1312,43 +1311,43 @@ impl UsbDevice
 
         // set endpoint transmit complete event
         self.or32(USB2D_ENDPTCOMPLETE, USB2D_EPBIT!(ep_num));
-        //log("usbd: ep idle complete\n\r");
+        //println!("usbd: ep idle complete");
     }
     
     pub fn ep_flush(&mut self, epNum: u8) -> UsbdError
     {
-        //log("ep flush...\n\r");
+        //println!("ep flush...");
         self.w32(USB2D_ENDPTFLUSH, USB2D_EPBIT!(epNum)); // epflush
         for i in 0..1000
         {
             timerWait(100);
             if ( (self.r32(USB2D_ENDPTFLUSH) & USB2D_EPBIT!(epNum)) == 0 )
             {
-                //log("a\n\r");
+                //println!("a");
                 for j in 0..1000
                 {
                     timerWait(100);
                     if ( (self.r32(USB2D_ENDPTSTAT) & USB2D_EPBIT!(epNum)) == 0 )
                     {
-                        //log("b\n\r");
+                        //println!("b");
                         for k in 0..1000
                         {
                             timerWait(100);
                             if ( (self.r32(USB2D_ENDPTPRIME) & USB2D_EPBIT!(epNum)) == 0 )
                             {
-                                //log("c\n\r");
+                                //println!("c");
                                 return UsbdError::Success;
                             }
                         }
-                        log("usbd: ep flush timeout 3...\n\r");
+                        println!("usbd: ep flush timeout 3...");
                         return UsbdError::HwTimeOut;
                     }
                 }
-                log("usbd: ep flush timeout 2...\n\r");
+                println!("usbd: ep flush timeout 2...");
                 return UsbdError::HwTimeOut;
             }
         }
-        log("usbd: ep flush timeout 1...\n\r");
+        println!("usbd: ep flush timeout 1...");
         return UsbdError::HwTimeOut;
     }
     
@@ -1399,7 +1398,7 @@ impl UsbDevice
                 }
             }
             
-            //log_uarta("usbd: Transfer active, but timed out!! \n\r");
+            //log_uarta("usbd: Transfer active, but timed out!! ");
             //logu32(self.ep_status(epNum) as u32);
             
             if (self.ep_status(epNum) != UsbEpStatus::TxfrIdle) {
@@ -1573,11 +1572,11 @@ impl UsbDevice
 
         //dcache_flush(pTransDesc, sizeof(*pTransDesc));
 
-        //log("prime...\n\r");
+        //println!("prime...");
         self.or32(USB2D_ENDPTPRIME, USB2D_EPBIT!(epNum));
 
         if (sync) {
-            //log("wait...\n\r");
+            //println!("wait...");
             return self.ep_wait(epNum);
         }
 
@@ -1597,7 +1596,7 @@ impl UsbDevice
         }
 
         memcpy_iou32(self.get_xferbuf(UsbEpNum::CTRL_IN as u8), pDataBuffer, dataLen);
-        //log("transact...\n\r");
+        //println!("transact...");
 
         // Host requested less than we have available to provide; truncate to wLength
         if (dataLen > pkt.wLength as usize) {
@@ -1607,17 +1606,16 @@ impl UsbDevice
         let mut result = self.ep_txfer_start(UsbEpNum::CTRL_IN as u8, dataLen, true);
         timerWait(8000);
         if (result == UsbdError::Success) {
-            //log("transfer success...\n\r");
+            //println!("transfer success...");
             result = self.ep_txfer_start(UsbEpNum::CTRL_OUT as u8, 0, true);
         }
         
         if (result == UsbdError::Success) {
-            //log("ack success...\n\r");
+            //println!("ack success...");
         } 
         else
         {
-            log("usbd: ack fail...\n\r");
-            logu32(result as u32)
+            println!("usbd: ack fail... {:x}", result as u32);
         }
 
         return result;
@@ -1744,9 +1742,7 @@ impl UsbDevice
         let descriptorIndex = (pkt.wValue & 0xFF) as u8;
         let descriptorType = ((pkt.wValue >> 8) & 0xFF) as u8;
         
-        //log("Process device desc...\n\r");
-        //logu8(descriptorIndex);
-        //logu8(descriptorType);
+        //println!("Process device desc... {}, {}", descriptorIndex, descriptorType);
         
         match descriptorType
         {
@@ -1772,8 +1768,7 @@ impl UsbDevice
                 }
                 else
                 {
-                    log ("usbd: invalid string descriptor idx ");
-                    logu8(descriptorIndex);
+                    println!("usbd: invalid string descriptor idx {}", descriptorIndex);
                     //printf("usbd: invalid string descriptor idx %02x\n", descriptorIndex);
                     return self.setup_ack();
                 }
@@ -1784,8 +1779,7 @@ impl UsbDevice
             }
 
             _ => {
-                log ("usbd: invalid string descriptor type ");
-                logu8(descriptorType);
+                println!("usbd: invalid string descriptor type {}", descriptorType);
                 //printf("usbd: invalid descriptorType %02x\n", descriptorType);
                 return self.setup_ack();
             }
@@ -1809,9 +1803,7 @@ impl UsbDevice
             }
         }
         
-        //log("Process setup\n\r");
-        //logu8(pkt.bmRequestType);
-        //logu8(pkt.bRequest);
+        //println!("Process setup {:#x}, {:#x}", pkt.bmRequestType, pkt.bRequest);
 
         if (pkt.bmRequestType == UsbSetupRequestType::HOST2DEV_DEVICE as u8)
         {
@@ -1828,9 +1820,7 @@ impl UsbDevice
             }
             else if (pkt.bRequest == DeviceRequestTypes::SET_CONFIGURATION as u8)
             {
-                log("...?\n");
                 let result = self.ep_txfer_start(UsbEpNum::CTRL_IN as u8, 0, true);
-                logu32(result as u32);
                 if (result == UsbdError::Success)
                 {
                     self.usbfCtxt.UsbConfigurationNo = (pkt.wValue & 0xFF) as u8;
@@ -1841,8 +1831,7 @@ impl UsbDevice
             }
             else
             {
-                log("usbd: invalid HOST2DEV_DEVICE bRequest ");
-                logu8(pkt.bRequest);
+                println!("usbd: invalid HOST2DEV_DEVICE bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1862,8 +1851,7 @@ impl UsbDevice
             }
             else
             {
-                log("usbd: invalid DEV2HOST_DEVICE bRequest ");
-                logu8(pkt.bRequest);
+                println!("usbd: invalid DEV2HOST_DEVICE bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1883,8 +1871,7 @@ impl UsbDevice
             }
             else
             {
-                log("usbd: invalid DEV2HOST_INTERFACE bRequest ");
-                logu8(pkt.bRequest);
+                println!("usbd: invalid DEV2HOST_INTERFACE bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1911,8 +1898,7 @@ impl UsbDevice
             }
             else
             {
-                log("usbd: invalid DEV2HOST_EP bRequest ");
-                logu8(pkt.bRequest);
+                println!("usbd: invalid DEV2HOST_EP bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1923,16 +1909,14 @@ impl UsbDevice
             {
                 if (pkt.wValue == 0)
                 {
-                    log("usbd: invalid [CLEAR|SET]_FEATURE wValue ");
-                    logu16(pkt.wValue);
+                    println!("usbd: invalid [CLEAR|SET]_FEATURE wValue {:x}", pkt.wValue);
                     return self.setup_ack();
                 }
                 
                 let epAddr: u8 = (pkt.wIndex & 0xFF) as u8;
                 if(!self.epidx_exists(epAddr))
                 {
-                    log("usbd: invalid [CLEAR|SET]_FEATURE wIndex ");
-                    logu16(pkt.wIndex);
+                    println!("usbd: invalid [CLEAR|SET]_FEATURE wIndex {:x}", pkt.wIndex);
                     return self.setup_ack();
                 }
                 
@@ -1941,21 +1925,18 @@ impl UsbDevice
             }
             else
             {
-                log("usbd: invalid HOST2DEV_EP bRequest ");
-                logu8(pkt.bRequest);
+                println!("usbd: invalid HOST2DEV_EP bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
         else if (pkt.bmRequestType == UsbSetupRequestType::DEV2HOST_INTERFACE_CLASS as u8)
         {
-            log("usbd: invalid DEV2HOST_INTERFACE_CLASS bRequest ");
-            logu8(pkt.bRequest);
+            println!("usbd: invalid DEV2HOST_INTERFACE_CLASS bRequest {:x}", pkt.bRequest);
             return self.setup_ack();
         }
         else if (pkt.bmRequestType == UsbSetupRequestType::HOST2DEV_INTERFACE_CLASS as u8)
         {
-            log("usbd: invalid HOST2DEV_INTERFACE_CLASS bRequest ");
-            logu8(pkt.bRequest);
+            println!("usbd: invalid HOST2DEV_INTERFACE_CLASS bRequest {:x}", pkt.bRequest);
             return self.setup_ack();
         }
         else
@@ -2117,7 +2098,7 @@ pub fn irq_usb()
     // A USB reset was requested
     if ((usbSts & USBSTS_USBRST) != 0)
     {
-        log("usbd: reset requested\n\r");
+        println!("usbd: reset requested");
         usbd.halt_activity();
         
         // Run through reset handlers
@@ -2133,7 +2114,7 @@ pub fn irq_usb()
         // Initialize USB context
         usbd.update_port_speed();
         
-        log("usbd: cable reinserted\n\r");
+        println!("usbd: cable reinserted");
 
         result = usbd.init_controller();
         if (result != UsbdError::Success) {
@@ -2166,15 +2147,15 @@ pub fn usbd_recover() -> UsbdError
     let mut ret: UsbdError = UsbdError::Success;
     let usbd = get_usbd();
     
-    log("usbd: Begin init\n\r");
+    println!("usbd: Begin init");
     usbd.init();
     cdc_init();
     
-    log("usbd: Begin init context\n\r");
+    println!("usbd: Begin init context");
     usbd.init_context();
     usbd.enable_clocks();
     usbd.init_controller();
-    log ("usbd: USB controller initialized...\n\r");
+    println!("usbd: USB controller initialized...");
     
     let debug_interface_idx: u8 = usbd.create_interface(2);
     let debug_interface: _ = usbd.get_interface(debug_interface_idx);
@@ -2195,7 +2176,7 @@ pub fn usbd_recover() -> UsbdError
     {
         irq_usb();
     }
-    log("Enumeration complete!\n\r");
+    println!("Enumeration complete!");
 
     return ret;
 }
