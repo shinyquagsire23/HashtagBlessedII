@@ -6,6 +6,7 @@
 
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
 
 use crate::util::*;
 use crate::io::car::*;
@@ -941,19 +942,19 @@ impl UsbDevice
         let mut apbdev_pmc_usb_ao: MMIOReg = MMIOReg::new(APBDEV_PMC_USB_AO);
         
         clk_out_enb_l |= CLK_ENB_USBD;
-        timerWait(2);
+        timer_wait(2);
         rst_dev_l_set |= CLK_ENB_USBD;
-        timerWait(2);
+        timer_wait(2);
         rst_dev_l_clr |= CLK_ENB_USBD;
-        timerWait(2);
+        timer_wait(2);
         rst_dev_w_clr |= XUSB_PADCTL_RST;
-        timerWait(2);
+        timer_wait(2);
 
         self.or32(USB_SUSP_CTRL, SUSPCTRL_UTMIP_RESET);
         self.or32(USB_SUSP_CTRL, SUSPCTRL_UTMIP_PHY_ENB);
         utmipll_hw_pwrdn_cfg0 &= 0xFFFFFFFD;
 
-        timerWait(10);
+        timer_wait(10);
 
         self.and32(USB1_UTMIP_MISC_CFG1, 0xBFFFFFFF);
         utmip_pll_cfg2 &= 0xBFFFFFFF;
@@ -973,7 +974,7 @@ impl UsbDevice
         
         for i in 0..10
         {
-            timerWait(10);
+            timer_wait(10);
             if (utmipll_hw_pwrdn_cfg0 & bit!(31) != 0)
             {
                 break;
@@ -1001,7 +1002,7 @@ impl UsbDevice
         self.and32(USB1_UTMIP_XCVR_CFG0, 0xFFDFFFFF);
         self.and32(USB1_UTMIP_XCVR_CFG2, 0xFFFFF1FF);
         self.or32(USB1_UTMIP_XCVR_CFG2, 0x400);
-        timerWait(10);
+        timer_wait(10);
         self.and32(USB1_UTMIP_DEBOUNCE_CFG0, 0xFFFF0000);
         self.or32(USB1_UTMIP_DEBOUNCE_CFG0, (usb_pll_related[OSC_FREQ] & 0xFFFF));
         if (OSC_FREQ == 5 || OSC_FREQ == 9)
@@ -1044,35 +1045,35 @@ impl UsbDevice
         self.or32(USB1_UTMIP_BIAS_CFG1, 0x50 | 0x78000);
         
         self.and32(USB1_UTMIP_BIAS_CFG0, !bit!(10));
-        timerWait(1);
+        timer_wait(1);
         self.and32(USB1_UTMIP_BIAS_CFG1, !bit!(0));
         self.or32(USB1_UTMIP_BIAS_CFG1, bit!(1));
-        timerWait(100);
+        timer_wait(100);
         self.or32(USB1_UTMIP_BIAS_CFG1, bit!(0));
         self.and32(USB1_UTMIP_BIAS_CFG1, !bit!(23));
-        timerWait(3);
+        timer_wait(3);
         self.and32(USB1_UTMIP_BIAS_CFG1, !bit!(0));
-        timerWait(100);
+        timer_wait(100);
         self.or32(USB1_UTMIP_BIAS_CFG1, bit!(0));
         self.and32(USB1_UTMIP_BIAS_CFG1, !bit!(23));
         clk_out_enb_y &= !(bit!(18));
         utmip_pll_cfg2 &= !(bit!(0) | bit!(4) | bit!(2) | bit!(24));
         utmip_pll_cfg2 |= (bit!(1) | 0x28 | 0x2000000);
-        timerWait(10);
+        timer_wait(10);
         self.and32(USB1_UTMIP_BIAS_CFG0, 0xFF3FF7FF);
-        timerWait(10);
+        timer_wait(10);
         apbdev_pmc_usb_ao &= 0xFFFFFFF3;
-        timerWait(10);
+        timer_wait(10);
         self.and32(USB1_UTMIP_XCVR_CFG0, 0xFFFFBFFF);
-        timerWait(10);
+        timer_wait(10);
         self.and32(USB1_UTMIP_XCVR_CFG0, 0xFFFEFFFF);
-        timerWait(10);
+        timer_wait(10);
         self.and32(USB1_UTMIP_XCVR_CFG0, 0xFFFBFFFF);
-        timerWait(10);
+        timer_wait(10);
         self.and32(USB1_UTMIP_XCVR_CFG1, 0xFFFFFFFB);
-        timerWait(10);
+        timer_wait(10);
         self.and32(USB1_UTMIP_XCVR_CFG1, 0xFFFFFFEF);
-        timerWait(10);
+        timer_wait(10);
         
         if(self.enable_devicemode() != UsbdError::Success)
         {
@@ -1090,7 +1091,7 @@ impl UsbDevice
 
         for i in 0..400000
         {
-            timerWait(80000);
+            timer_wait(80000);
 
             timed_out = (self.r32(USB_SUSP_CTRL) & SUSPCTRL_USB_PHY_CLK_VALID) == 0;
             if (!timed_out) { break; }
@@ -1111,7 +1112,7 @@ impl UsbDevice
         self.or32(USB2D_USBCMD, USBCMD_RST);
         for i in 0..100000
         {
-            timerWait(80000);
+            timer_wait(80000);
 
             timed_out = (self.r32(USB2D_USBCMD) & USBCMD_RST) != 0;
             if (!timed_out) { break; }
@@ -1125,7 +1126,7 @@ impl UsbDevice
 
         for i in 0..1000
         {
-            timerWait(100);
+            timer_wait(100);
 
             timed_out = (self.r32(USB_SUSP_CTRL) & SUSPCTRL_USB_PHY_CLK_VALID) == 0;
             if (!timed_out) { break; }
@@ -1141,7 +1142,7 @@ impl UsbDevice
         self.or32(USB2D_USBMODE, USBMODE_CM_DEVICE);
         for i in 0..1000
         {
-            timerWait(100);
+            timer_wait(100);
             timed_out = ((self.r32(USB2D_USBMODE) & USBMODE_CM_MASK) != USBMODE_CM_DEVICE);
             if (!timed_out) { break; }
         }
@@ -1256,7 +1257,7 @@ impl UsbDevice
         self.or32(USB2D_USBCMD, USBCMD_RUNSTOP);
         for i in 0..1000
         {
-            timerWait(100);
+            timer_wait(100);
             
             // Check whether host has acknowledged our attachment
             if ((self.r32(USB2D_USBCMD) & USBCMD_RUNSTOP) != 0)
@@ -1298,7 +1299,7 @@ impl UsbDevice
         //println!("usbd: ep idle...");
         self.ep_flush(ep_num);
         //println!("usbd: ep idle flushed...");
-        timerWait(100);
+        timer_wait(100);
         
         let queue_head = self.get_ep_queue_head_ptr(ep_num);
         let ep = &mut self.endpoints[ep_num as usize];
@@ -1320,19 +1321,19 @@ impl UsbDevice
         self.w32(USB2D_ENDPTFLUSH, USB2D_EPBIT!(epNum)); // epflush
         for i in 0..1000
         {
-            timerWait(100);
+            timer_wait(100);
             if ( (self.r32(USB2D_ENDPTFLUSH) & USB2D_EPBIT!(epNum)) == 0 )
             {
                 //println!("a");
                 for j in 0..1000
                 {
-                    timerWait(100);
+                    timer_wait(100);
                     if ( (self.r32(USB2D_ENDPTSTAT) & USB2D_EPBIT!(epNum)) == 0 )
                     {
                         //println!("b");
                         for k in 0..1000
                         {
-                            timerWait(100);
+                            timer_wait(100);
                             if ( (self.r32(USB2D_ENDPTPRIME) & USB2D_EPBIT!(epNum)) == 0 )
                             {
                                 //println!("c");
@@ -1391,7 +1392,7 @@ impl UsbDevice
         {
             for i in 0..10000
             {
-                timerWait(100);
+                timer_wait(100);
                 if (self.ep_status(epNum) != UsbEpStatus::TxfrActive 
                     || self.ep_status(epNum) == UsbEpStatus::TxfrIdle) {
                     return UsbdError::Success;
@@ -1471,7 +1472,7 @@ impl UsbDevice
         
         // Disable pullup on D+ to signal a disconnect to the host
         self.w32(USB2D_USBCMD, USBCMD_FS2);
-        timerWait(800);
+        timer_wait(800);
     }
     
     pub fn epidx_exists(&mut self, epNum: u8) -> bool
@@ -1604,7 +1605,7 @@ impl UsbDevice
         }
 
         let mut result = self.ep_txfer_start(UsbEpNum::CTRL_IN as u8, dataLen, true);
-        timerWait(8000);
+        timer_wait(8000);
         if (result == UsbdError::Success) {
             //println!("transfer success...");
             result = self.ep_txfer_start(UsbEpNum::CTRL_OUT as u8, 0, true);
@@ -1810,7 +1811,7 @@ impl UsbDevice
             if (pkt.bRequest == DeviceRequestTypes::SET_ADDRESS as u8)
             {
                 let result = self.ep_txfer_start(UsbEpNum::CTRL_IN as u8, 0, true);
-                timerWait(800);
+                timer_wait(800);
                 if (result == UsbdError::Success)
                 {
                     let old = self.r32(USB2D_PERIODICLISTBASE);

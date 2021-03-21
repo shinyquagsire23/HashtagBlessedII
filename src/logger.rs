@@ -40,15 +40,15 @@ pub fn logger_init()
 pub fn log_uarta(data: &str)
 {
     let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
-    uart_a.writeStr(data);
-    //uart_a.waitForWrite();
+    uart_a.write_str(data);
+    //uart_a.wait_for_write();
 }
 
 pub fn log_uarta_raw(data: &[u8])
 {
     let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
-    uart_a.writeBytes(data);
-    //uart_a.waitForWrite();
+    uart_a.write_bytes(data);
+    //uart_a.wait_for_write();
 }
 
 pub fn log_usb(data: &str)

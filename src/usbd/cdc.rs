@@ -4,7 +4,8 @@
  * See LICENSE.md for terms of use.
  */
  
- #![allow(non_upper_case_globals)]
+#![allow(non_upper_case_globals)]
+#![allow(non_snake_case)]
 
 use crate::usbd::usbd::*;
 use core::mem;
@@ -13,6 +14,7 @@ use crate::arm::threading::*;
 use alloc::vec::Vec;
 use crate::logger::*;
 use crate::util::t210_reset;
+use alloc::string::String;
 
 pub const ACM_SEND_ENCAPSULATED_COMMAND: u8 = (0x00);
 pub const ACM_GET_ENCAPSULATED_RESPONSE: u8 = (0x01);
@@ -56,7 +58,7 @@ pub struct CdcGadget
     if1_epBulkOut: u8,
     if1_epBulkIn: u8,
     setup_hook_idx: usize,
-    cmd_buf: Vec<u8>,
+    cmd_buf: String,
     
     cdc_if0_extraDesc: CdcExtraDescData,
 }
@@ -77,7 +79,7 @@ impl CdcGadget
             if1_epBulkOut: 0xff,
             if1_epBulkIn: 0xff,
             setup_hook_idx: usize::MAX,
-            cmd_buf: Vec::new(),
+            cmd_buf: String::new(),
             cdc_if0_extraDesc: CdcExtraDescData
             {
                 classHeaderDesc: UsbDtClassHeaderFunc
@@ -131,27 +133,18 @@ pub fn cdc_process_cmd()
 {
     let cdc = get_cdc();
     
-    let cmd_u8: &[u8] = cdc.cmd_buf.as_slice() as &[u8];
-    let cmd_conv = str::from_utf8(&cmd_u8);
-    if (cmd_conv.is_err())
-    {
-        println!("> Failed to parse input to UTF-8!");
-        return;
-    }
-    let cmd = cmd_conv.unwrap();
-    
-    if (cmd == "rcm")
+    if (cdc.cmd_buf == "rcm")
     {
         unsafe {t210_reset()};
         loop {}
     }
-    else if (cmd == "irqshow")
+    else if (cdc.cmd_buf == "irqshow")
     {
         //irq_show();
     }
     else
     {
-        println!("> Unknown command `{}`", cmd);
+        println!("> Unknown command `{}`", cdc.cmd_buf);
     }
     
     cdc.cmd_buf.clear();
@@ -185,7 +178,7 @@ pub fn cdc_send(usbd: &mut UsbDevice, data: &[u8], len: usize)
     
     if (!cdc.isactive) { return; }
 
-    let is_enabled = cdc.enabled && cdc.isactive && (getCore() == 0);
+    let is_enabled = cdc.enabled && cdc.isactive && (get_core() == 0);
 
     if (len == 0)
     {
@@ -237,7 +230,7 @@ pub fn cdc_if1_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
     for i in 0..(len as usize)
     {
         let val = pkt_data.offset(i as isize).read();
-        cdc.cmd_buf.push(val);
+        cdc.cmd_buf.push(val as char);
         if (val == '\r' as u8)
         {
             cdc.cmd_buf.pop();

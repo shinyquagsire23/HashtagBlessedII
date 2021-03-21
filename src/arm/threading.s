@@ -6,8 +6,8 @@
 
 .section ".text"
 
-.global get_core
-get_core:
+.global _get_core
+_get_core:
     mrs x0, mpidr_el1
     and x0, x0, #0xff
     ret

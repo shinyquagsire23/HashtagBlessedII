@@ -10,7 +10,7 @@ extern "C" {
     pub fn enable_fp();
 }
 
-pub fn fpuEnable()
+pub fn fpu_enable()
 {
     unsafe
     {

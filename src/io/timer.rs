@@ -13,24 +13,24 @@ pub const TMR_VADDR : u32 = (0x60005000);
 
 pub const TIMERUS_CNTR_1US_ADDR : u32 = (TMR_VADDR + 0x010);
 
-pub fn timerGetTick() -> u32 {
+pub fn timer_get_tick() -> u32 {
     return peek32(TIMERUS_CNTR_1US_ADDR);
 }
 
-pub fn timerWait(uSecs: u32)
+pub fn timer_wait(uSecs: u32)
 {
-    let read_init = timerGetTick();
+    let read_init = timer_get_tick();
     let mut end: u64 = (read_init as u64) + (uSecs as u64);
 
     if (end > 0x100000000)
     {
         end -= 0x100000000;
         loop {
-            if (timerGetTick() < read_init) { break };
+            if (timer_get_tick() < read_init) { break };
         }
     }
     
     loop {
-        if (((timerGetTick() as u64) & 0xFFFFFFFF) >= end) { break };
+        if (((timer_get_tick() as u64) & 0xFFFFFFFF) >= end) { break };
     }
 }
