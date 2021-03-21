@@ -84,31 +84,31 @@ impl CdcGadget
             {
                 classHeaderDesc: UsbDtClassHeaderFunc
                 {
-                    bFunctionLength: 0,
-                    bDescriptorType: 0,
-                    bDescriptorSubtype: 0,
-                    bcdCDC: 0
+                    bFunctionLength: 5,
+                    bDescriptorType: CS_INTERFACE,
+                    bDescriptorSubtype: USB_ST_HEADER,
+                    bcdCDC: 0x110
                 },
                 classCallMgmtDesc: UsbDtClassCallMgmt
                 {
-                    bFunctionLength: 0,
-                    bDescriptorType: 0,
-                    bDescriptorSubtype: 0,
+                    bFunctionLength: 5,
+                    bDescriptorType: CS_INTERFACE,
+                    bDescriptorSubtype: USB_ST_CMF,
                     bmCapabilities: 0,
                     bDataInterface: 0,
                 },
                 classAbstractControlDesc: UsbDtClassAbstractControl
                 {
-                    bFunctionLength: 0,
-                    bDescriptorType: 0,
-                    bDescriptorSubtype: 0,
+                    bFunctionLength: 4,
+                    bDescriptorType: CS_INTERFACE,
+                    bDescriptorSubtype: USB_ST_ACMF,
                     bmCapabilities: 0,
                 },
                 classUnionFunctionDesc: UsbDtClassUnionFunction
                 {
-                    bFunctionLength: 0,
-                    bDescriptorType: 0,
-                    bDescriptorSubtype: 0,
+                    bFunctionLength: 5,
+                    bDescriptorType: CS_INTERFACE,
+                    bDescriptorSubtype: USB_ST_UF,
                     bMasterInterface: 0,
                     bSlaveInterface0: 0,
                 }
@@ -135,7 +135,7 @@ pub fn cdc_process_cmd()
     
     if (cdc.cmd_buf == "rcm")
     {
-        unsafe {t210_reset()};
+        unsafe {t210_reset();}
         loop {}
     }
     else if (cdc.cmd_buf == "irqshow")
@@ -384,25 +384,8 @@ pub fn cdc_init()
     usbd.get_interface(cdc.cdc_if0).associatedNum = 2;
     
     // Required metadata
-    cdc.cdc_if0_extraDesc.classHeaderDesc.bFunctionLength = mem::size_of::<UsbDtClassHeaderFunc>() as u8;
-    cdc.cdc_if0_extraDesc.classHeaderDesc.bDescriptorType = CS_INTERFACE;
-    cdc.cdc_if0_extraDesc.classHeaderDesc.bDescriptorSubtype = USB_ST_HEADER;
-    cdc.cdc_if0_extraDesc.classHeaderDesc.bcdCDC = 0x110;
-    
-    cdc.cdc_if0_extraDesc.classCallMgmtDesc.bFunctionLength = mem::size_of::<UsbDtClassCallMgmt>() as u8;
-    cdc.cdc_if0_extraDesc.classCallMgmtDesc.bDescriptorType = CS_INTERFACE;
-    cdc.cdc_if0_extraDesc.classCallMgmtDesc.bDescriptorSubtype = USB_ST_CMF;
-    cdc.cdc_if0_extraDesc.classCallMgmtDesc.bmCapabilities = 0x00;
     cdc.cdc_if0_extraDesc.classCallMgmtDesc.bDataInterface = usbd.get_interface(cdc.cdc_if1).interfaceNumber;
     
-    cdc.cdc_if0_extraDesc.classAbstractControlDesc.bFunctionLength = mem::size_of::<UsbDtClassAbstractControl>() as u8;
-    cdc.cdc_if0_extraDesc.classAbstractControlDesc.bDescriptorType = CS_INTERFACE;
-    cdc.cdc_if0_extraDesc.classAbstractControlDesc.bDescriptorSubtype = USB_ST_ACMF;
-    cdc.cdc_if0_extraDesc.classAbstractControlDesc.bmCapabilities = 0x00;
-    
-    cdc.cdc_if0_extraDesc.classUnionFunctionDesc.bFunctionLength = mem::size_of::<UsbDtClassUnionFunction>() as u8;
-    cdc.cdc_if0_extraDesc.classUnionFunctionDesc.bDescriptorType = CS_INTERFACE;
-    cdc.cdc_if0_extraDesc.classUnionFunctionDesc.bDescriptorSubtype = USB_ST_UF;
     cdc.cdc_if0_extraDesc.classUnionFunctionDesc.bMasterInterface = usbd.get_interface(cdc.cdc_if0).interfaceNumber;
     cdc.cdc_if0_extraDesc.classUnionFunctionDesc.bSlaveInterface0 = usbd.get_interface(cdc.cdc_if1).interfaceNumber;
 

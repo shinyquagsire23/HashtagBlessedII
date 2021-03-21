@@ -19,10 +19,9 @@
 
 #[macro_use]
 extern crate alloc;
+extern crate spin;
 
 mod heap;
-
-use heap::HtbHeap;
 
 #[macro_use] mod util;
 
@@ -38,7 +37,9 @@ mod arm;
 mod usbd;
 mod vm;
 mod modules;
+mod task;
 
+use heap::HtbHeap;
 use util::*;
 use io::uart::*;
 use io::uart::UARTDevicePort::*;
@@ -60,6 +61,10 @@ use usbd::cdc::*;
 use logger::*;
 use alloc::vec::Vec;
 use hos::kernel::KERNEL_START;
+use task::*;
+use task::executor::*;
+use task::sleep::*;
+use arm::ticks::*;
 
 global_asm!(include_str!("start.s"));
 
@@ -112,8 +117,19 @@ pub extern "C" fn main_cold()
     println!("USB connection recovered!");
 
     timer_trap_el1();
+
+    task_init();
+
     
-    println!("Begin copy to {:16x}... {:x}\n\r", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
+    task_run(example_task());
+    task_run(blink_task());
+    
+    loop
+    {
+        task_advance();
+    }
+    
+    /*println!("Begin copy to {:16x}... {:x}\n\r", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
     memcpy32(ipaddr_to_paddr(KERNEL_START), to_u64ptr!(&KERN_DATA[0]), KERN_DATA.len());
 
     // Set up SVC pre/post hooks
@@ -164,6 +180,29 @@ pub extern "C" fn main_cold()
     {
         drop_to_el1(KERNEL_START);
         loop {}
+    }*/
+}
+
+async fn async_number() -> u32 
+{
+    SleepNs::new(secs_to_ns(10)).await;
+    42
+}
+
+async fn example_task()
+{
+    let number = async_number().await;
+    println!("async number: {}", number);
+}
+
+async fn blink_task()
+{
+    let mut i = 0;
+    loop
+    {
+        i += 1;
+        print!(if (i & 1 == 0) { ".\r" } else { "*\r" });
+        SleepNs::new(ms_to_ns(500)).await;
     }
 }
 
@@ -172,7 +211,8 @@ pub extern "C" fn exception_handle()
 {
     println!("exception?");
     timer_wait(1000000);
-    loop {}
+    unsafe { t210_reset(); }
+    loop{}
 }
 
 #[no_mangle]
@@ -196,5 +236,6 @@ fn on_panic(panic_info: &PanicInfo) -> ! {
         println!("panic occurred but can't get location information...");
     }*/
     timer_wait(1000000);
-    loop {}
+    unsafe { t210_reset(); }
+    loop{}
 }

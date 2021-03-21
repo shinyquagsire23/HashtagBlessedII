@@ -11,3 +11,4 @@ pub mod threading;
 pub mod mmu;
 pub mod gic;
 pub mod virtualization;
+pub mod ticks;

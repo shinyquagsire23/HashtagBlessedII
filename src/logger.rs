@@ -15,19 +15,19 @@ use core::str;
 mod logger {
     macro_rules! println {
         () => { };
-        ($fmt:expr) => { logln($fmt); };
+        ($fmt:expr) => { crate::logger::logln($fmt); };
         ($fmt:expr, $($arg:tt)*) => {{
             let text = format!($fmt, $($arg)*);
-            logln(&text);
+            crate::logger::logln(&text);
         }};
     }
     
     macro_rules! print {
         () => { };
-        ($fmt:expr) => { log($fmt); };
+        ($fmt:expr) => { crate::logger::log($fmt); };
         ($fmt:expr, $($arg:tt)*) => {{
             let text = format!($fmt, $($arg)*);
-            log(&text);
+            crate::logger::log(&text);
         }};
     }
 }

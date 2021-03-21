@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-synctools = "0.1.0"
 wchar = "0.6.1"
+spin = "0.9.0"
 
 [dependencies.linked_list_allocator]
 default-features = false
@@ -18,3 +18,11 @@ features = ["const_mut_refs"]
 [dependencies.lazy_static]
 version = "0.2.1"
 features = ["spin_no_std"]
+
+[dependencies.crossbeam-queue]
+version = "0.2.1"
+default-features = false
+features = ["alloc"]
+
+[dependencies.derive_more]
+version = "0.99.0"

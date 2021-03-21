@@ -7,11 +7,11 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::cell::RefCell;
 use core::ptr::{self, NonNull};
 
-use synctools::mcs::MCSLock;
+use spin::Mutex;
 use linked_list_allocator::Heap;
 
 pub struct HtbHeap {
-    heap: MCSLock<RefCell<Heap>>,
+    heap: Mutex<RefCell<Heap>>,
 }
 
 impl HtbHeap {
@@ -21,7 +21,7 @@ impl HtbHeap {
     /// [`init`](struct.HtbHeap.html#method.init) method before using the allocator.
     pub const fn empty() -> HtbHeap {
         HtbHeap {
-            heap: MCSLock::new(RefCell::new(Heap::empty())),
+            heap: Mutex::new(RefCell::new(Heap::empty())),
         }
     }
 
