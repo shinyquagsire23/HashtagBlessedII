@@ -19,9 +19,18 @@ pub fn timerGetTick() -> u32 {
 
 pub fn timerWait(uSecs: u32)
 {
-    let end: u64 = (timerGetTick() as u64 + uSecs as u64);
+    let read_init = timerGetTick();
+    let mut end: u64 = (read_init as u64) + (uSecs as u64);
+
+    if (end > 0x100000000)
+    {
+        end -= 0x100000000;
+        loop {
+            if (timerGetTick() < read_init) { break };
+        }
+    }
     
     loop {
-        if ((timerGetTick() as u64) < end) { break };
+        if (((timerGetTick() as u64) & 0xFFFFFFFF) >= end) { break };
     }
 }
