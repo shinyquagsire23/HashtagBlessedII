@@ -898,35 +898,35 @@ impl UsbDevice
     
     pub fn w32(&mut self, offs: u32, val: u32)
     {
-        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), val);
+        pokeio32(self.usbfCtxt.UsbBaseAddr + (offs*4), val);
     }
     
     pub fn r32(&mut self, offs: u32) -> u32
     {
-        return peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
+        return peekio32(self.usbfCtxt.UsbBaseAddr + (offs*4));
     }
     
     pub fn echo32(&mut self, offs: u32)
     {
-        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
-        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), old);
+        let old: u32 = peekio32(self.usbfCtxt.UsbBaseAddr + (offs*4));
+        pokeio32(self.usbfCtxt.UsbBaseAddr + (offs*4), old);
     }
     
     pub fn or32(&mut self, offs: u32, val: u32)
     {
-        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
-        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), old | val);
+        let old: u32 = peekio32(self.usbfCtxt.UsbBaseAddr + (offs*4));
+        pokeio32(self.usbfCtxt.UsbBaseAddr + (offs*4), old | val);
     }
     
     pub fn and32(&mut self, offs: u32, val: u32)
     {
-        let old: u32 = peek32(self.usbfCtxt.UsbBaseAddr + (offs*4));
-        poke32(self.usbfCtxt.UsbBaseAddr + (offs*4), old & val);
+        let old: u32 = peekio32(self.usbfCtxt.UsbBaseAddr + (offs*4));
+        pokeio32(self.usbfCtxt.UsbBaseAddr + (offs*4), old & val);
     }
     
     pub fn enable_clocks(&mut self)
     {
-        let OSC_FREQ: usize = (peek32(CLK_RST_CONTROLLER_OSC_CTRL) >> 28) as usize;
+        let OSC_FREQ: usize = (peekio32(CLK_RST_CONTROLLER_OSC_CTRL) >> 28) as usize;
         //pll_init(0xC000CC, usb_pll_related_1[3 * OSC_FREQ + 1], usb_pll_related_1[3 * OSC_FREQ], usb_pll_related_1[3 * OSC_FREQ + 2], 0, 0, &v23);
         
         let mut clk_out_enb_l: MMIOReg = MMIOReg::new(CLK_RST_CONTROLLER_CLK_OUT_ENB_L);

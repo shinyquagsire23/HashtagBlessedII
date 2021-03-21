@@ -10,3 +10,5 @@ pub mod vsdmmc;
 pub mod vsmc;
 pub mod vsvc;
 pub mod vsysreg;
+pub mod vmmu;
+pub mod funcs;

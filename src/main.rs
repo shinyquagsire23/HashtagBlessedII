@@ -6,6 +6,7 @@
 
 #![no_std]
 #![no_main]
+#![feature(llvm_asm)]
 #![feature(global_asm)]
 #![feature(asm)]
 #![allow(unused_parens)]
@@ -38,7 +39,7 @@ mod usbd;
 mod vm;
 mod modules;
 
-use util::t210_reset;
+use util::*;
 use io::uart::*;
 use io::uart::UARTDevicePort::*;
 use core::panic::PanicInfo;
@@ -46,13 +47,23 @@ use io::timer::*;
 use io::smmu::*;
 use arm::fpu::*;
 use arm::gic::*;
+use arm::virtualization::*;
+use arm::cache::*;
+use arm::mmu::*;
 use vm::virq::*;
+use vm::vmmio::*;
+use vm::vsvc::*;
+use vm::vmmu::*;
+use vm::funcs::*;
 use usbd::usbd::*;
 use usbd::cdc::*;
 use logger::*;
 use alloc::vec::Vec;
+use hos::kernel::KERNEL_START;
 
 global_asm!(include_str!("start.s"));
+
+const KERN_DATA: &[u8] = include_bytes!("../data/0_kernel_80060000.bin");
 
 #[global_allocator]
 static ALLOCATOR: HtbHeap = HtbHeap::empty();
@@ -83,10 +94,8 @@ pub extern "C" fn main_cold()
     let mut gic: GIC = GIC::new();
     gic.init();
 
-    //vmmio_init();
-    //vsvc_init();
-    
-    println!("example {:.1} test {:x} words {}", 1, 2, 3);
+    vmmio_init();
+    vsvc_init();
 
     usbd_recover();
     gic.enable_interrupt(IRQ_T210_USB, 0);
@@ -97,15 +106,64 @@ pub extern "C" fn main_cold()
     println!("");
     println!("Waddup from EL2!");
     
-    println!("Wait for CDC");
     while (!cdc_active()){timer_wait(1);}
     cdc_enable();
     
-    println!("Done init!");
+    println!("USB connection recovered!");
 
-    loop {
-        timer_wait(1000000);
-        println!("beep");
+    timer_trap_el1();
+    
+    println!("Begin copy to {:16x}... {:x}\n\r", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
+    memcpy32(ipaddr_to_paddr(KERNEL_START), to_u64ptr!(&KERN_DATA[0]), KERN_DATA.len());
+
+    // Set up SVC pre/post hooks
+    let daifclr_2_instr: u32 = 0xd50342ff;
+    let search_start = ipaddr_to_paddr(KERNEL_START);
+    let search_end = search_start + KERN_DATA.len() as u64;
+    let mut a64_hooked = false;
+    let mut a32_hooked = false;
+    let mut search = search_start;
+    loop
+    {
+        // SVC handlers are identifiable by
+        // msr DAIFClr, #0x2
+        // blr x19 / blr x11 for A32/A64
+        // msr DAIFSet, #0x2
+        if (peek32(search) == daifclr_2_instr && peek16(search + 6) == 0xd63f)
+        {
+            println!("Hooking addr {:16x}\n\r", search);
+            if (peek32(search + 4) == 0xd63f0160) // A64
+            {
+                poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
+                poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
+                a64_hooked = true;
+            }
+            else if (peek32(search + 4) == 0xd63f0260) // A32
+            {
+                poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
+                poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
+                a32_hooked = true;
+            }
+        }
+
+        if (a64_hooked && a32_hooked) { break; }
+        
+        search += 4;
+    }
+
+    // Finalize things
+    dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
+    icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
+    println!("Done copy...");
+    vttbr_construct();
+    
+    println!("translate {:16x} -> {:16x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
+    
+    println!("Dropping to EL1");
+    unsafe
+    {
+        drop_to_el1(KERNEL_START);
+        loop {}
     }
 }
 

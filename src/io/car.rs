@@ -96,11 +96,11 @@ impl CarDeviceInfo
         {
             if(self.clk_source_offset != 0)
             {
-                poke32(clk_src_reg, (self.clk_source as u32) << 29 | (self.clk_divisor as u32));
+                pokeio32(clk_src_reg, (self.clk_source as u32) << 29 | (self.clk_divisor as u32));
             }
         
-            poke32(clk_enb_reg, peek32(clk_enb_reg) | bit!(self.dev_bit));
-            poke32(rst_dev_reg, peek32(rst_dev_reg) & !(bit!(self.dev_bit)));
+            pokeio32(clk_enb_reg, peekio32(clk_enb_reg) | bit!(self.dev_bit));
+            pokeio32(rst_dev_reg, peekio32(rst_dev_reg) & !(bit!(self.dev_bit)));
         }
     }
     
@@ -108,8 +108,8 @@ impl CarDeviceInfo
         let rst_dev_reg: u32 = (CAR_VADDR + self.rst_dev_offset);
         let clk_enb_reg: u32 = (CAR_VADDR + self.clk_out_enb_offset);
 
-        poke32(rst_dev_reg, peek32(rst_dev_reg) | bit!(self.dev_bit));
-        poke32(clk_enb_reg, peek32(clk_enb_reg) & !(bit!(self.dev_bit)));
+        pokeio32(rst_dev_reg, peekio32(rst_dev_reg) | bit!(self.dev_bit));
+        pokeio32(clk_enb_reg, peekio32(clk_enb_reg) & !(bit!(self.dev_bit)));
     }
     
     pub fn isEnabled(&self) -> bool {
@@ -118,8 +118,8 @@ impl CarDeviceInfo
 
         unsafe
         {
-            let rst_dev = peek32(rst_dev_reg);
-            let clk_enb = peek32(clk_enb_reg);
+            let rst_dev = peekio32(rst_dev_reg);
+            let clk_enb = peekio32(clk_enb_reg);
             
             if (rst_dev & bit!(self.dev_bit) != 0) {
                 return false;

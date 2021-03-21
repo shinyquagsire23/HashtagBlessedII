@@ -1,3 +1,4 @@
 /target
 copy-junk.sh
 hashtagblessed.bin
+data/*.bin

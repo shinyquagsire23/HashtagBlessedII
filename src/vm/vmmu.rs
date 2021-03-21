@@ -4,9 +4,12 @@
  * See LICENSE.md for terms of use.
  */
 
-use crate::vm::vsdmmc::*;
-
-pub fn vmmio_init()
+pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
 {
-    vsdmmc_init();
+    return 0; // TODO
+}
+
+pub fn vttbr_construct()
+{
+    // TODO
 }

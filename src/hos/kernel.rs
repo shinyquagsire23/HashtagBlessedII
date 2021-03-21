@@ -4,4 +4,4 @@
  * See LICENSE.md for terms of use.
  */
 
-pub const KERNEL_START: u32 = 0x80060000;
+pub const KERNEL_START: u64 = 0x80060000;

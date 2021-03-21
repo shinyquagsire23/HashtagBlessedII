@@ -6,8 +6,8 @@
 
 .section ".text"
 
-.global dcache_flush_invalidate
-dcache_flush_invalidate:
+.global _dcache_flush_invalidate
+_dcache_flush_invalidate:
 	add x1, x1, x0
 	mrs x8, CTR_EL0
 	lsr x8, x8, #16
@@ -27,8 +27,8 @@ dcache_flush_invalidate_L0:
 	dsb sy
 	ret
 
-.global dcache_invalidate
-dcache_invalidate:
+.global _dcache_invalidate
+_dcache_invalidate:
 	add x1, x1, x0
 	mrs x8, CTR_EL0
 	lsr x8, x8, #16
@@ -48,8 +48,8 @@ dcache_invalidate_L0:
 	dsb sy
 	ret
 
-.global icache_invalidate
-icache_invalidate:
+.global _icache_invalidate
+_icache_invalidate:
 	add x1, x1, x0
 	mrs x8, CTR_EL0
 	lsr x8, x8, #16
@@ -69,8 +69,8 @@ icache_invalidate_L0:
 	dsb sy
 	ret
 
-.global dcache_flush
-dcache_flush:
+.global _dcache_flush
+_dcache_flush:
 	add x1, x1, x0
 	mrs x8, CTR_EL0
 	lsr x8, x8, #16
@@ -90,8 +90,8 @@ dcache_flush_L0:
 	dsb sy
 	ret
 
-.global dcache_zero
-dcache_zero:
+.global _dcache_zero
+_dcache_zero:
 	add x1, x1, x0
 	mrs x8, CTR_EL0
 	lsr x8, x8, #16
@@ -106,7 +106,7 @@ dcache_zero_L0:
 	dc  zva, x8
 	add x8, x8, x9
 	cmp x8, x10
-	bcc dcache_zero
+	bcc _dcache_zero
 
 	dsb sy
 	ret

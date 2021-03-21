@@ -8,10 +8,10 @@
 
 use crate::util::*;
 
-pub const TMR_PADDR : u32 = (0x60005000);
-pub const TMR_VADDR : u32 = (0x60005000);
+pub const TMR_PADDR : u64 = (0x60005000);
+pub const TMR_VADDR : u64 = (0x60005000);
 
-pub const TIMERUS_CNTR_1US_ADDR : u32 = (TMR_VADDR + 0x010);
+pub const TIMERUS_CNTR_1US_ADDR : u64 = (TMR_VADDR + 0x010);
 
 pub fn timer_get_tick() -> u32 {
     return peek32(TIMERUS_CNTR_1US_ADDR);

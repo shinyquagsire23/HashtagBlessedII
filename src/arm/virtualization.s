@@ -4,9 +4,15 @@
  * See LICENSE.md for terms of use.
  */
 
-use crate::vm::vsdmmc::*;
+.section ".text"
 
-pub fn vmmio_init()
-{
-    vsdmmc_init();
-}
+.global _get_cnthctl_el2
+_get_cnthctl_el2:
+    mrs x0, cnthctl_el2
+    ret
+
+.global _set_cnthctl_el2
+_set_cnthctl_el2:
+    msr cnthctl_el2, x0
+    ret
+

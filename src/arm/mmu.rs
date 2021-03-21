@@ -33,10 +33,38 @@ extern "C" {
     pub fn getTTB1() -> u64;
 }
 
-// TODO
-/*
-//intptr_t translate_el2_stage12(intptr_t vaddr);
-intptr_t translate_el1_stage12(intptr_t vaddr);
-intptr_t translate_el0_stage12(intptr_t vaddr);
-intptr_t translate_el1_stage1(intptr_t vaddr);
-*/
+pub fn translate_el1_stage12(vaddr: u64) -> u64
+{
+    unsafe
+    {
+    let mut taddr: u64 = 0;
+    asm!("AT S12E1R, {0}", in(reg) vaddr);
+    asm!("mrs {0}, PAR_EL1", out(reg) taddr);
+
+    return (taddr & 0xffffffffff000) | (vaddr & 0xFFF);
+    }
+}
+
+pub fn translate_el0_stage12(vaddr: u64) -> u64
+{
+    unsafe
+    {
+    let mut taddr: u64 = 0;
+    asm!("AT S12E0R, {0}", in(reg) vaddr);
+    asm!("mrs {0}, PAR_EL1", out(reg) taddr);
+
+    return (taddr & 0xffffffffff000) | (vaddr & 0xFFF);
+    }
+}
+
+pub fn translate_el1_stage1(vaddr: u64) -> u64
+{
+    unsafe
+    {
+    let mut taddr: u64 = 0;
+    asm!("AT S1E1R, {0}", in(reg) vaddr);
+    asm!("mrs {0}, PAR_EL1", out(reg) taddr);
+
+    return (taddr & 0xffffffffff000) | (vaddr & 0xFFF);
+    }
+}

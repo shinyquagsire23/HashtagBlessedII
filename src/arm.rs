@@ -10,3 +10,4 @@ pub mod fpu;
 pub mod threading;
 pub mod mmu;
 pub mod gic;
+pub mod virtualization;
