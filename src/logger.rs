@@ -18,10 +18,11 @@ use crate::task::*;
 use crate::task::sleep::*;
 use crate::arm::ticks::*;
 use crate::util::*;
+use crate::arm::threading::*;
 
 static LOGGER_MUTEX: spin::Mutex<()> = spin::Mutex::new(());
 
-static mut LOGGER_DATA: Option<VecDeque<u8>> = None;
+static mut LOGGER_DATA: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
 
 #[macro_use]
 mod logger {
@@ -52,6 +53,16 @@ mod logger {
         }};
     }
     
+    macro_rules! println_uarta {
+        () => { };
+        ($fmt:expr) => { crate::logger::logln_unsafe($fmt); };
+        ($fmt:expr, $($arg:tt)*) => {{
+            let text = format!($fmt, $($arg)*);
+            crate::logger::log_uarta(&text);
+            crate::logger::log_uarta("\r\n");
+        }};
+    }
+    
     macro_rules! print_unsafe {
         () => { };
         ($fmt:expr) => { crate::logger::log_unsafe($fmt); };
@@ -66,7 +77,10 @@ pub fn logger_init()
 {
     unsafe
     {
-        LOGGER_DATA = Some(VecDeque::new());
+        for i in 0..8
+        {
+            LOGGER_DATA[i] = Some(VecDeque::new());
+        }
     }
     
     task_run(logger_task());
@@ -124,6 +138,8 @@ pub fn log_process()
         critical_start();
         
         // Process data later if this gets called mid-log
+        // TODO per-core mutex?
+        // TODO timestamps?
         let lock_try = LOGGER_MUTEX.try_lock();
         if (!lock_try.is_some())
         {
@@ -132,20 +148,56 @@ pub fn log_process()
         }
         let lock = lock_try.unwrap();
         
-        let mut logger_data = LOGGER_DATA.as_mut().unwrap();
-        
-        if (logger_data.is_empty())
+        loop
         {
-            critical_end();
-            return;
+            for core_iter in 0..8
+            {
+                let mut logger_data = LOGGER_DATA[core_iter].as_mut().unwrap();
+                
+                if (logger_data.is_empty())
+                {
+                    continue;
+                }
+
+                let data = logger_data.make_contiguous();
+
+                let mut next_line = data.len();
+                for i in 0..data.len()
+                {
+                    if data[i] == '\n' as u8 {
+                        next_line = i+1;
+                        break;
+                    }
+                }
+                
+                log_uarta_raw(&data[0..next_line]);
+                log_usb_raw(&data[0..next_line]);
+                
+                let data_len = data.len();
+                drop(data);
+                
+                if next_line >= data_len {
+                    logger_data.clear()
+                }
+                else {
+                    let mut i = 0;
+                    logger_data.retain(|_| (i >= next_line, i += 1).0);
+                }
+            }
+            
+            let mut is_done = true;
+            for core_iter in 0..8
+            {
+                let mut logger_data = LOGGER_DATA[core_iter].as_mut().unwrap();
+                
+                if (!logger_data.is_empty())
+                {
+                    is_done = false;
+                }
+            }
+            
+            if is_done { break; }
         }
-        
-        // TODO keep cores separate and print by newlines
-        let data = logger_data.make_contiguous();
-        log_uarta_raw(data);
-        log_usb_raw(data);
-        
-        logger_data.clear();
         
         critical_end();
     }
@@ -159,8 +211,7 @@ pub fn log(data: &str)
         
         let lock = LOGGER_MUTEX.lock();
 
-        //TODO keep cores separate
-        let mut logger_data = LOGGER_DATA.as_mut().unwrap();
+        let mut logger_data = LOGGER_DATA[get_core() as usize].as_mut().unwrap();
         
         for byte in data.bytes()
         {
@@ -180,7 +231,7 @@ pub fn log_unsafe(data: &str)
 pub fn logln_unsafe(data: &str)
 {
     log_unsafe(data);
-    log_unsafe("\n\r");
+    log_unsafe("\r\n");
 }
 
 pub fn log_raw(data: &[u8])
@@ -192,7 +243,7 @@ pub fn log_raw(data: &[u8])
 pub fn logln(data: &str)
 {
     log(data);
-    log("\n\r");
+    log("\r\n");
 }
 
 pub fn logu32(data: u32)

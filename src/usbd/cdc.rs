@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use crate::logger::*;
 use crate::util::t210_reset;
 use alloc::string::String;
+use crate::io::timer::*;
 
 pub const ACM_SEND_ENCAPSULATED_COMMAND: u8 = (0x00);
 pub const ACM_GET_ENCAPSULATED_RESPONSE: u8 = (0x01);
@@ -94,7 +95,7 @@ impl CdcGadget
                     bFunctionLength: 5,
                     bDescriptorType: CS_INTERFACE,
                     bDescriptorSubtype: USB_ST_CMF,
-                    bmCapabilities: 0,
+                    bmCapabilities: 0x3,
                     bDataInterface: 0,
                 },
                 classAbstractControlDesc: UsbDtClassAbstractControl
@@ -102,7 +103,7 @@ impl CdcGadget
                     bFunctionLength: 4,
                     bDescriptorType: CS_INTERFACE,
                     bDescriptorSubtype: USB_ST_ACMF,
-                    bmCapabilities: 0,
+                    bmCapabilities: 0x6,
                 },
                 classUnionFunctionDesc: UsbDtClassUnionFunction
                 {
@@ -169,6 +170,10 @@ pub fn cdc_enable()
 pub fn cdc_active() -> bool
 {
     let cdc = get_cdc();
+    
+    // keep compiler from optimizing this in a dumb way
+    unsafe { asm!("add xzr, xzr, {0}", in(reg) &cdc); }
+    
     return cdc.isactive;
 }
 
@@ -178,7 +183,7 @@ pub fn cdc_send(usbd: &mut UsbDevice, data: &[u8], len: usize)
     
     if (!cdc.isactive) { return; }
 
-    let is_enabled = cdc.enabled && cdc.isactive && (get_core() == 0);
+    let is_enabled = /*cdc.enabled && cdc.isactive &&*/ (get_core() == 0);
 
     if (len == 0)
     {
@@ -188,23 +193,27 @@ pub fn cdc_send(usbd: &mut UsbDevice, data: &[u8], len: usize)
 
     if (is_enabled /*&& mutexTryLock(&cdc_usb_mutex)*/)
     {
-        let mut bytes_to_send = len;
+        let mut bytes_to_send: i32 = len as i32;
         //mutexUnlock(&cdc_send_mutex);
 
         let mut i = 0;
         loop
         {
-            if (i >= bytes_to_send) { break; }
+            if (bytes_to_send <= 0) { break; }
             
-            let mut to_send = bytes_to_send;
-            if (to_send > 512) {
-                to_send = 512;
+            let mut to_send: usize = bytes_to_send as usize;
+            if (to_send > 64) {
+                to_send = 64;
             }
-            if(usbd.ep_tx(cdc.if1_epBulkIn, to_u64ptr!(&data[0]) + (i as u64), to_send, true) != UsbdError::Success) {
-                break;
+            for j in 0..10
+            {
+                if(usbd.ep_tx(cdc.if1_epBulkIn, to_u64ptr!(&data[i]), to_send, true) == UsbdError::Success) {
+                    break;
+                }
+                timer_wait(1000);
             }
-            bytes_to_send -= to_send;
-            i += 512;
+            bytes_to_send -= to_send as i32;
+            i += to_send;
         }
         //mutexUnlock(&cdc_usb_mutex);
 
@@ -230,6 +239,8 @@ pub fn cdc_if1_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
     for i in 0..(len as usize)
     {
         let val = pkt_data.offset(i as isize).read();
+        if (val == 0) { continue; }
+
         cdc.cmd_buf.push(val as char);
         if (val == '\r' as u8)
         {
@@ -248,10 +259,9 @@ pub fn cdc_if1_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
     //printf("%s", to_send);
 
     // Send our data
-    let old_en = cdc.enabled;
     cdc.enabled = true;
+    cdc.isactive = true;
     cdc_send(usbd, to_send.as_slice() as &[u8], to_send.len());
-    cdc.enabled = old_en;
     
     usbd.ep_idle(cdc.if1_epBulkOut);
     usbd.ep_txfer_start(cdc.if1_epBulkOut, CDC_BULK_PKT_SIZE as usize, false);
@@ -261,6 +271,9 @@ pub fn cdc_if1_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
 pub fn cdc_if1_sendcomplete(usbd: &mut UsbDevice, epNum: u8)
 {
     let cdc = get_cdc();
+    
+    cdc.enabled = true;
+    cdc.isactive = true;
 
     // Ask for more data
     usbd.ep_idle(cdc.if1_epBulkOut);
@@ -291,38 +304,40 @@ pub fn cdc_setup_hook(usbd: &mut UsbDevice, pkt: UsbSetupPacket) -> bool
             // the rest of the transaction unread
             if (pkt.wLength != 0)
             {
-                usbd.setup_getdata(0, pkt.wLength);
+                //usbd.setup_getdata(0, pkt.wLength);
+                //usbd.ep_txfer_start(UsbEpNum::CTRL_OUT as u8, 0, true);
+                usbd.ep_txfer_start(UsbEpNum::CTRL_IN as u8, 0, true);
+            }
+            else
+            {
+                // ACK
+                //usbd.setup_ack();
+                usbd.ep_txfer_start(UsbEpNum::CTRL_IN as u8, 0, true);
             }
             
-            // ACK
-            usbd.setup_ack();
             
             
-            
-            if (pkt.bRequest == ACM_SET_LINE_ENCODING && !cdc.isactive)
+            if (pkt.bRequest == ACM_SET_LINE_ENCODING && cdc.lineState == 0)
             {
                 // start transacting
-                usbd.ep_txfer_start(cdc.if0_epInterruptOut, CDC_INTR_PKT_SIZE as usize, false);
-                usbd.ep_txfer_start(cdc.if1_epBulkOut, CDC_BULK_PKT_SIZE as usize, false);
-            
-                cdc.isactive = true;
+                usbd.ep_txfer_start(cdc.if0_epInterruptOut, 0 as usize, false);
+                usbd.ep_txfer_start(cdc.if1_epBulkOut, 0 as usize, false);
                 
                 cdc.cmd_buf.clear();
             }
-            
-            if (pkt.bRequest == ACM_SET_CONTROL_LINE_STATE)
+            else if (pkt.bRequest == ACM_SET_LINE_ENCODING && cdc.lineState == 3)
+            {
+                cdc.isactive = true;
+                cdc.enabled = true;
+                
+                cdc_send(usbd, b"\r\n\r\n\r\n\x1b[2J", 6);
+                cdc.cmd_buf.clear();
+            }
+            else if (pkt.bRequest == ACM_SET_CONTROL_LINE_STATE)
             {
                 cdc.lineState = pkt.wValue;
-                
-                cdc.isactive = true;
-                let old_en = cdc.enabled;
-                cdc.enabled = true;
-                cdc_send(usbd, b"\n\r\n\r\n\r\x1b[2J", 6);
-                cdc.enabled = old_en;
-            }
-            else if (pkt.bRequest == ACM_SET_LINE_ENCODING /*&& cdc.lineState == 3*/)
-            {
-                
+
+                cdc.cmd_buf.clear();
             }
 
             return true;

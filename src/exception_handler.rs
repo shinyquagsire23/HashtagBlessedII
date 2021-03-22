@@ -539,15 +539,13 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
     }
     else if (ec == EC_MSRMRS)
     {
-        print_exception(ec, iss, ctx, ret_addr);
-        ret_addr = 0;//vsysreg_handle(iss, ctx); // TODO
+        //print_exception(ec, iss, ctx, ret_addr);
+        ret_addr = vsysreg_handle(iss, ctx); // TODO
     }
     else if (ec == EC_SMC64)
     {
         //print_exception(ec, iss, ctx, ret_addr);
         ret_addr = vsmc_handle(iss, ctx);
-        logger_unsafe_override();
-        log_process();
     }
     else if (ec == EC_DABT_LOWER_EL && ((iss & bit!(24)) != 0))
     {

@@ -9,6 +9,11 @@ pub fn vsvc_init()
 
 }
 
+pub const fn vsvc_get_curpid() -> u32
+{
+    return 0;
+}
+
 pub const fn vsvc_get_pid_name<'a>(pid: &'a u8) -> &'a str
 {
     return ""; //TODO

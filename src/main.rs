@@ -140,13 +140,25 @@ pub extern "C" fn main_cold()
     gic.enable_interrupt(IRQ_T210_USB, 0);
     tegra_irq_en(IRQNUM_T210_USB as i32);
     
+    let mut time_out = 3000;
+    while (!usbd_is_enumerated() && time_out > 0)
+    {
+        timer_wait(1000);
+        time_out -= 1;
+    }
+    println!("Enumeration complete!");
+    
     println!("");
     println!("");
     println!("");
     println!("Waddup from EL2!");
     
-    //while (!cdc_active()){timer_wait(1);}
-    timer_wait(4000000);
+    time_out = 10000;
+    while (!cdc_active() && time_out > 0)
+    {
+        timer_wait(1000);
+        time_out -= 1;
+    }
     cdc_enable();
     
     println!("USB connection recovered!");
@@ -155,12 +167,6 @@ pub extern "C" fn main_cold()
 
     task_run(example_task());
     task_run(blink_task());
-    
-    // Let things run a bit
-    for i in 0..10
-    {
-        task_advance();
-    }
     
     println!("Begin copy to {:016x}... {:x}", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
     memcpy32(ipaddr_to_paddr(KERNEL_START), to_u64ptr!(&KERN_DATA[0]), KERN_DATA.len());
@@ -204,28 +210,10 @@ pub extern "C" fn main_cold()
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     println!("Done copy...");
-    log_process();
     vttbr_construct();
     
     println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
-    
-    // Run tasks forever for now
-    /*loop
-    {
-        task_advance();
-    }*/
-    
-   
-    
-    // Let things run a bit
-    for i in 0..100
-    {
-        task_advance();
-        timer_wait(1000);
-    }
-
     println!("Dropping to EL1");
-    log_process();
     
     unsafe
     {
@@ -277,10 +265,12 @@ pub extern "C" fn irq_handle()  -> u64
 fn on_panic(panic_info: &PanicInfo) -> ! {
     critical_start();
 
-    logger_unsafe_override();
-    log_process();
+    // Force as much as we can out of the logger
+    //logger_unsafe_override();
+    //log_process();
     
-    println_unsafe!("panic?");
+    //println_unsafe!("panic?");
+    println_uarta!("{}", panic_info);
     println_unsafe!("{}", panic_info);
 
     timer_wait(1000000);

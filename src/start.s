@@ -165,25 +165,8 @@ t210_reset:
 
 exception_print:
     // Store context
-    sub sp, sp, #0x400
-#if 0
-    stp q0, q1, [sp, #0x200]
-    stp q2, q3, [sp, #0x210]
-    stp q4, q5, [sp, #0x220]
-    stp q6, q7, [sp, #0x230]
-    stp q8, q9, [sp, #0x240]
-    stp q10, q11, [sp, #0x250]
-    stp q12, q13, [sp, #0x260]
-    stp q14, q15, [sp, #0x270]
-    stp q16, q17, [sp, #0x280]
-    stp q18, q19, [sp, #0x290]
-    stp q20, q21, [sp, #0x2A0]
-    stp q22, q23, [sp, #0x2B0]
-    stp q24, q25, [sp, #0x2C0]
-    stp q26, q27, [sp, #0x2D0]
-    stp q28, q29, [sp, #0x2E0]
-    stp q30, q31, [sp, #0x2F0]
-#endif
+    sub sp, sp, #0x200
+
     stp x0, x1, [sp, #0x0]
     stp x2, x3, [sp, #0x10]
     stp x4, x5, [sp, #0x20]
@@ -254,7 +237,7 @@ kern_preserve:
     b _do_except
 
 hyp_preserve:
-    add x21, sp, #0x400
+    add x21, sp, #0x200
     str x21, [sp, #0xE8]
 
     mrs	x21, elr_el2 // pc
@@ -289,25 +272,6 @@ _do_except:
     msr elr_el2, x0
 
 #if 0
-    ldp q0, q1, [sp, #0x200]
-    ldp q2, q3, [sp, #0x210]
-    ldp q4, q5, [sp, #0x220]
-    ldp q6, q7, [sp, #0x230]
-    ldp q8, q9, [sp, #0x240]
-    ldp q10, q11, [sp, #0x250]
-    ldp q12, q13, [sp, #0x260]
-    ldp q14, q15, [sp, #0x270]
-    ldp q16, q17, [sp, #0x280]
-    ldp q18, q19, [sp, #0x290]
-    ldp q20, q21, [sp, #0x2A0]
-    ldp q22, q23, [sp, #0x2B0]
-    ldp q24, q25, [sp, #0x2C0]
-    ldp q26, q27, [sp, #0x2D0]
-    ldp q28, q29, [sp, #0x2E0]
-    ldp q30, q31, [sp, #0x2F0]
-#endif
-
-#if 0
     ldr	x0, [sp, #0x1F0]
     msr	fpsr, x0
 
@@ -330,33 +294,14 @@ _do_except:
     ldp x26, x27, [sp, #0xD0]
     ldr x28, [sp, #0xE0]
     ldr x30, [sp, #0xF0]
-    add sp, sp, #0x400
+    add sp, sp, #0x200
     eret
 
 .pool
 
 irq_print:
     // Store context
-    sub sp, sp, #0x400
-
-#if 0
-    stp q0, q1, [sp, #0x200]
-    stp q2, q3, [sp, #0x210]
-    stp q4, q5, [sp, #0x220]
-    stp q6, q7, [sp, #0x230]
-    stp q8, q9, [sp, #0x240]
-    stp q10, q11, [sp, #0x250]
-    stp q12, q13, [sp, #0x260]
-    stp q14, q15, [sp, #0x270]
-    stp q16, q17, [sp, #0x280]
-    stp q18, q19, [sp, #0x290]
-    stp q20, q21, [sp, #0x2A0]
-    stp q22, q23, [sp, #0x2B0]
-    stp q24, q25, [sp, #0x2C0]
-    stp q26, q27, [sp, #0x2D0]
-    stp q28, q29, [sp, #0x2E0]
-    stp q30, q31, [sp, #0x2F0]
-#endif
+    sub sp, sp, #0x200
 
     stp x0, x1, [sp, #0x0]
     stp x2, x3, [sp, #0x10]
@@ -428,7 +373,7 @@ irq_kern_preserve:
     b irq__do_except
 
 irq_hyp_preserve:
-    add x21, sp, #0x400
+    add x21, sp, #0x200
     str x21, [sp, #0xE8]
 
     mrs	x21, elr_el2 // pc
@@ -466,24 +411,6 @@ irq__do_except:
     //mrs x0, hcr_el2
     //orr x0, x0, #(1<<7)
     //msr hcr_el2, x0
-#if 0
-    ldp q0, q1, [sp, #0x200]
-    ldp q2, q3, [sp, #0x210]
-    ldp q4, q5, [sp, #0x220]
-    ldp q6, q7, [sp, #0x230]
-    ldp q8, q9, [sp, #0x240]
-    ldp q10, q11, [sp, #0x250]
-    ldp q12, q13, [sp, #0x260]
-    ldp q14, q15, [sp, #0x270]
-    ldp q16, q17, [sp, #0x280]
-    ldp q18, q19, [sp, #0x290]
-    ldp q20, q21, [sp, #0x2A0]
-    ldp q22, q23, [sp, #0x2B0]
-    ldp q24, q25, [sp, #0x2C0]
-    ldp q26, q27, [sp, #0x2D0]
-    ldp q28, q29, [sp, #0x2E0]
-    ldp q30, q31, [sp, #0x2F0]
-#endif
 
 #if 0
     ldr	x0, [sp, #0x1F0]
@@ -508,7 +435,7 @@ irq__do_except:
     ldp x26, x27, [sp, #0xD0]
     ldr x28, [sp, #0xE0]
     ldr x30, [sp, #0xF0]
-    add sp, sp, #0x400
+    add sp, sp, #0x200
     eret
 
 .pool

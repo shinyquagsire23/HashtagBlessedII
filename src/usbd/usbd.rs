@@ -1828,6 +1828,10 @@ impl UsbDevice
                 }
                 return result;
             }
+            else if (pkt.bRequest == DeviceRequestTypes::GET_STATUS as u8)
+            {
+                return self.setup_transact(pkt, to_u64ptr!(&self.usbDeviceStatus), mem::size_of::<u16>());
+            }
             else
             {
                 //println!("usbd: invalid HOST2DEV_DEVICE bRequest {:x}", pkt.bRequest);
@@ -2170,12 +2174,16 @@ pub fn usbd_recover() -> UsbdError
     usbd.ep_idle(UsbEpNum::BULK_OUT as u8);
     
     usbd.interrupt_en();
-    
-    while (!usbd.is_enumeration_done())
-    {
-        irq_usb();
-    }
-    println!("Enumeration complete!");
 
     return ret;
+}
+
+pub fn usbd_is_enumerated() -> bool
+{
+    let usbd = get_usbd();
+    
+    // keep compiler from optimizing this in a dumb way
+    unsafe { asm!("add xzr, xzr, {0}", in(reg) &usbd); }
+    
+    return usbd.is_enumeration_done();
 }

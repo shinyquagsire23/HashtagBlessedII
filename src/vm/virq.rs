@@ -13,6 +13,8 @@ use crate::usbd::usbd::*;
 use crate::usbd::cdc::*;
 use crate::task::*;
 use crate::logger::*;
+use crate::vm::vsysreg::*;
+use crate::vm::vsvc::*;
 
 pub const IRQNUM_T210_USB: u16 = 20;
 
@@ -51,6 +53,8 @@ pub const LR_STS_PENDING: u32 = (1);
 pub const GICH_INT_NP:  u32 = (bit!(3)); // no pending LRs
 pub const GICH_INT_U:   u32 = (bit!(1)); // underflow
 pub const GICH_INT_EOI: u32 = (bit!(0)); // end of interrupt IRQ
+
+static mut IRQ_HEARTBEAT_DOWNSCALE: [u32; 8] = [0; 8];
 
 pub fn tegra_irq_is_sgi(irqnum: u16) -> bool
 {
@@ -92,8 +96,8 @@ pub fn virq_handle() -> u64
 {
     let mut gic: GIC = GIC::new();
     
-    //let start_ticks = vsysreg_getticks();
-    //let end_ticks = start_ticks;
+    let start_ticks = vsysreg_getticks();
+    let mut end_ticks = start_ticks;
 
     let rpr = gic.get_rpr();
     let vrpr = gic.get_vrpr();
@@ -129,7 +133,9 @@ pub fn virq_handle() -> u64
     if (int_id == 26) // timer
     {
         //TODO better place this
-        //task_advance();
+        if (get_core() == 0) {
+            task_advance();
+        }
         
         unsafe
         {
@@ -139,47 +145,21 @@ pub fn virq_handle() -> u64
         asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
         tmp = 0x1;
         asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
+
+        IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] += 1;
+        if (IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] >= 0x100)
+        {
+            println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
+            IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] = 0;
+        }
         }
         
         gic.set_eoir(iar);
         gic.set_dir(iar);
         
-        //TODO
-        //end_ticks = vsysreg_getticks();
-        //vsysreg_addoffset(end_ticks - start_ticks);
+        end_ticks = vsysreg_getticks();
+        vsysreg_addoffset(end_ticks - start_ticks);
         return get_elr_el2();
-        
-        //TODO
-        /*
-        if (++irq_heartbeat_downscale[get_core()] >= 0x100)
-        {
-            printf("(core %u) heartbeat %x %x %s %016llx %s\n\r", get_core(), lockup[get_core()], vsvc_get_curpid(), vsvc_get_curpid_name(), last_core_ret, last_core_name);
-            irq_heartbeat_downscale[get_core()] = 0;
-
-            if (get_core() == 3 && lockup[get_core()] == last_lockup[get_core()])
-            {
-                asm volatile ("mrs %0, CNTP_CVAL_EL0" : "=r" (tmp));
-                printf("lockup %x\n\r", tmp);
-                /*tmp = 100;
-                asm volatile ("msr CNTP_TVAL_EL0, %0" : "=r" (tmp));
-                tmp = 0x1;
-                asm volatile ("msr CNTP_CTL_EL0, %0" : "=r" (tmp));
-                gic_enable_interrupt(0x1e, get_core());
-                GICC_EOIR = 0x1e;
-                GICC_DIR = 0x1e;
-                GICH_APR &= ~BIT(1);*/
-
-            }
-            last_lockup[get_core()] = lockup[get_core()];
-        }
-        else
-        {
-            cdc_send(NULL, 0);
-        }
-
-
-
-        goto _done;*/
     }
     else if (int_id == IRQ_EL2_GIC_MAINTENANCE)
     {
@@ -222,8 +202,8 @@ pub fn virq_handle() -> u64
         gic.set_dir(iar);
         
         //TODO
-        //end_ticks = vsysreg_getticks();
-        //vsysreg_addoffset(end_ticks - start_ticks);
+        end_ticks = vsysreg_getticks();
+        vsysreg_addoffset(end_ticks - start_ticks);
         return get_elr_el2();
     }
     else if (iar_int_id != 0x3FF)
@@ -265,8 +245,8 @@ pub fn virq_handle() -> u64
     //if (get_core() == 3)
      //   printf("(core %u) b\n\r", get_core());
     //TODO
-    //end_ticks = vsysreg_getticks();
-    //vsysreg_addoffset(end_ticks - start_ticks);
+    end_ticks = vsysreg_getticks();
+    vsysreg_addoffset(end_ticks - start_ticks);
     return get_elr_el2();
 }
 
