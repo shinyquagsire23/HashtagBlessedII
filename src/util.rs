@@ -42,6 +42,21 @@ pub fn pokeio32(addr: u32, val: u32) {
     }
 }
 
+#[inline(always)]
+pub fn peek64(addr: u64) -> u64 {
+    unsafe {
+        let mut_reg: *mut u64 = (addr) as _;
+        return mut_reg.read_volatile();
+    }
+}
+
+#[inline(always)]
+pub fn poke64(addr: u64, val: u64) {
+    unsafe {
+        let mut_reg: *mut u64 = (addr) as _;
+        mut_reg.write_volatile(val);
+    }
+}
 
 #[inline(always)]
 pub fn peek32(addr: u64) -> u32 {
@@ -104,6 +119,11 @@ pub fn memcpy_iou32(dst: u64, src: u64, len: usize) {
 #[inline(always)]
 pub fn memcpy32(dst: u64, src: u64, len: usize) {
     memcpy_iou32(dst, src, len);
+}
+
+#[inline(always)]
+pub fn memset32(dst: u64, val: u32, len: usize) {
+    memset_iou32(dst, val, len);
 }
 
 #[derive(Copy, Clone)]

@@ -118,6 +118,19 @@ SECTIONS
         *(.bss.*)
         . = ALIGN(0x20);
         __bss_end = .;
+        
+         . = ALIGN(4096);
+         __vttbr_lv1 = .;
+         . += 0x400;
+         
+         . = ALIGN(4096);
+         __vttbr_lv2_slab = .;
+         . += 0x800000;
+         
+         . = ALIGN(4096);
+         __vttbr_lv3_slab = .;
+         . += 0x2000000;
+        
         . = ALIGN(0x100000);
     } >ram = 0xff
     

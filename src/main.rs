@@ -65,6 +65,7 @@ use task::*;
 use task::executor::*;
 use task::sleep::*;
 use arm::ticks::*;
+use arm::threading::get_core;
 
 global_asm!(include_str!("start.s"));
 
@@ -83,6 +84,19 @@ pub extern "C" fn main_warm()
     timer_wait(1000000);
 }
 
+pub fn irq_timer_init(gic: &mut GIC)
+{
+    unsafe
+    {
+        let mut tmp: u64 = 0;
+        tmp = 0x10; // quickly jump to IRQ handler so it can reset a better value
+        asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
+        tmp = 0x1;
+        asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
+        gic.enable_interrupt(26, get_core());
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn main_cold() 
 {
@@ -98,9 +112,11 @@ pub extern "C" fn main_cold()
     
     logger_init();
     smmu_init();
+    vttbr_init();
     
     let mut gic: GIC = GIC::new();
     gic.init();
+    irq_timer_init(&mut gic);
 
     vmmio_init();
     vsvc_init();
@@ -178,12 +194,23 @@ pub extern "C" fn main_cold()
     println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
     
     // Run tasks forever for now
-    loop
+    /*loop
     {
         task_advance();
-    }
+    }*/
     
+   
+    
+    // Let things run a bit
+    for i in 0..100
+    {
+        task_advance();
+        timer_wait(1000);
+    }
+
     println!("Dropping to EL1");
+    log_process();
+    
     unsafe
     {
         drop_to_el1(KERNEL_START);
@@ -200,7 +227,7 @@ async fn async_number() -> u32
 async fn example_task()
 {
     let number = async_number().await;
-    println!("async number: {}", number);
+    println!("async task returned: {}", number);
 }
 
 async fn blink_task()
@@ -217,7 +244,12 @@ async fn blink_task()
 #[no_mangle]
 pub extern "C" fn exception_handle() 
 {
-    println!("exception?");
+    critical_start();
+
+    logger_unsafe_override();
+    log_process();
+    
+    println_unsafe!("exception?");
     timer_wait(1000000);
     unsafe { t210_reset(); }
     loop{}

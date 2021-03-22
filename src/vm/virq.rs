@@ -11,6 +11,8 @@ use crate::arm::threading::*;
 use crate::arm::exceptions::*;
 use crate::usbd::usbd::*;
 use crate::usbd::cdc::*;
+use crate::task::*;
+use crate::logger::*;
 
 pub const IRQNUM_T210_USB: u16 = 20;
 
@@ -126,17 +128,29 @@ pub fn virq_handle() -> u64
 
     if (int_id == 26) // timer
     {
-        //TODO
-        /*u32 tmp = 0;
+        //TODO better place this
+        //task_advance();
+        
+        unsafe
+        {
+        let mut tmp: u64 = 0;
 
         tmp = 0x80000;
-        asm volatile ("msr CNTHP_TVAL_EL2, %0" : "=r" (tmp));
+        asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
         tmp = 0x1;
-        asm volatile ("msr CNTHP_CTL_EL2, %0" : "=r" (tmp));
-
-        GICC_EOIR = iar;
-        GICC_DIR = iar;
-
+        asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
+        }
+        
+        gic.set_eoir(iar);
+        gic.set_dir(iar);
+        
+        //TODO
+        //end_ticks = vsysreg_getticks();
+        //vsysreg_addoffset(end_ticks - start_ticks);
+        return get_elr_el2();
+        
+        //TODO
+        /*
         if (++irq_heartbeat_downscale[get_core()] >= 0x100)
         {
             printf("(core %u) heartbeat %x %x %s %016llx %s\n\r", get_core(), lockup[get_core()], vsvc_get_curpid(), vsvc_get_curpid_name(), last_core_ret, last_core_name);
