@@ -255,3 +255,13 @@ pub fn virq_handle() -> u64
     //vsysreg_addoffset(end_ticks - start_ticks);
     return get_elr_el2();
 }
+
+pub fn critical_start()
+{
+    unsafe { asm!("msr daifset, #0xf"); }
+}
+
+pub fn critical_end()
+{
+    unsafe { asm!("msr daifclr, #0xf"); }
+}

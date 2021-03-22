@@ -93,6 +93,9 @@ pub extern "C" fn main_cold()
     let mut uart_a: UARTDevice = UARTDevice::new(UartA);
     uart_a.init(115200);
     
+    // Initialize tasking for logger
+    task_init();
+    
     logger_init();
     smmu_init();
     
@@ -118,18 +121,16 @@ pub extern "C" fn main_cold()
 
     timer_trap_el1();
 
-    task_init();
-
-    
     task_run(example_task());
     task_run(blink_task());
     
-    loop
+    // Let things run a bit
+    for i in 0..10
     {
         task_advance();
     }
     
-    /*println!("Begin copy to {:16x}... {:x}\n\r", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
+    println!("Begin copy to {:016x}... {:x}", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
     memcpy32(ipaddr_to_paddr(KERNEL_START), to_u64ptr!(&KERN_DATA[0]), KERN_DATA.len());
 
     // Set up SVC pre/post hooks
@@ -147,7 +148,7 @@ pub extern "C" fn main_cold()
         // msr DAIFSet, #0x2
         if (peek32(search) == daifclr_2_instr && peek16(search + 6) == 0xd63f)
         {
-            println!("Hooking addr {:16x}\n\r", search);
+            println!("Hooking addr {:016x}", search);
             if (peek32(search + 4) == 0xd63f0160) // A64
             {
                 poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
@@ -171,16 +172,23 @@ pub extern "C" fn main_cold()
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     println!("Done copy...");
+    log_process();
     vttbr_construct();
     
-    println!("translate {:16x} -> {:16x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
+    println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
+    
+    // Run tasks forever for now
+    loop
+    {
+        task_advance();
+    }
     
     println!("Dropping to EL1");
     unsafe
     {
         drop_to_el1(KERNEL_START);
         loop {}
-    }*/
+    }
 }
 
 async fn async_number() -> u32 
@@ -223,18 +231,14 @@ pub extern "C" fn irq_handle()  -> u64
 
 #[panic_handler]
 fn on_panic(panic_info: &PanicInfo) -> ! {
-    println!("panic?");
-    println!("{}", panic_info);
-    /*if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-        println!(s);
-    } else {
-        println!("Couldn't get error info!");
-    }
-    if let Some(location) = panic_info.location() {
-       println!("panic occurred in file '{}' at line {}", location.file(), location.line());
-    } else {
-        println!("panic occurred but can't get location information...");
-    }*/
+    critical_start();
+
+    logger_unsafe_override();
+    log_process();
+    
+    println_unsafe!("panic?");
+    println_unsafe!("{}", panic_info);
+
     timer_wait(1000000);
     unsafe { t210_reset(); }
     loop{}

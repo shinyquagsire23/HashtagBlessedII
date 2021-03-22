@@ -27,7 +27,7 @@ pub fn timer_trap_el1()
     {
         let mut cnthctl_el2 = get_cnthctl_el2();
 
-        println!("{:x}", cnthctl_el2);
+        //println!("{:x}", cnthctl_el2);
         cnthctl_el2 &= !0x2; // trap EL1 accesses to timer controls but not accesses
         set_cnthctl_el2(cnthctl_el2);
     }

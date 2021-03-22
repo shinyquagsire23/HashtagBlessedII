@@ -1340,15 +1340,15 @@ impl UsbDevice
                                 return UsbdError::Success;
                             }
                         }
-                        println!("usbd: ep flush timeout 3...");
+                        //println!("usbd: ep flush timeout 3...");
                         return UsbdError::HwTimeOut;
                     }
                 }
-                println!("usbd: ep flush timeout 2...");
+                //println!("usbd: ep flush timeout 2...");
                 return UsbdError::HwTimeOut;
             }
         }
-        println!("usbd: ep flush timeout 1...");
+        //println!("usbd: ep flush timeout 1...");
         return UsbdError::HwTimeOut;
     }
     
@@ -1616,7 +1616,7 @@ impl UsbDevice
         } 
         else
         {
-            println!("usbd: ack fail... {:x}", result as u32);
+            //println!("usbd: ack fail... {:x}", result as u32);
         }
 
         return result;
@@ -1769,8 +1769,7 @@ impl UsbDevice
                 }
                 else
                 {
-                    println!("usbd: invalid string descriptor idx {}", descriptorIndex);
-                    //printf("usbd: invalid string descriptor idx %02x\n", descriptorIndex);
+                    //println!("usbd: invalid string descriptor idx {}", descriptorIndex);
                     return self.setup_ack();
                 }
             }
@@ -1780,8 +1779,7 @@ impl UsbDevice
             }
 
             _ => {
-                println!("usbd: invalid string descriptor type {}", descriptorType);
-                //printf("usbd: invalid descriptorType %02x\n", descriptorType);
+                //println!("usbd: invalid string descriptor type {}", descriptorType);
                 return self.setup_ack();
             }
         }
@@ -1832,7 +1830,7 @@ impl UsbDevice
             }
             else
             {
-                println!("usbd: invalid HOST2DEV_DEVICE bRequest {:x}", pkt.bRequest);
+                //println!("usbd: invalid HOST2DEV_DEVICE bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1852,7 +1850,7 @@ impl UsbDevice
             }
             else
             {
-                println!("usbd: invalid DEV2HOST_DEVICE bRequest {:x}", pkt.bRequest);
+                //println!("usbd: invalid DEV2HOST_DEVICE bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1872,7 +1870,7 @@ impl UsbDevice
             }
             else
             {
-                println!("usbd: invalid DEV2HOST_INTERFACE bRequest {:x}", pkt.bRequest);
+                //println!("usbd: invalid DEV2HOST_INTERFACE bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1899,7 +1897,7 @@ impl UsbDevice
             }
             else
             {
-                println!("usbd: invalid DEV2HOST_EP bRequest {:x}", pkt.bRequest);
+                //println!("usbd: invalid DEV2HOST_EP bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
@@ -1910,14 +1908,14 @@ impl UsbDevice
             {
                 if (pkt.wValue == 0)
                 {
-                    println!("usbd: invalid [CLEAR|SET]_FEATURE wValue {:x}", pkt.wValue);
+                    //println!("usbd: invalid [CLEAR|SET]_FEATURE wValue {:x}", pkt.wValue);
                     return self.setup_ack();
                 }
                 
                 let epAddr: u8 = (pkt.wIndex & 0xFF) as u8;
                 if(!self.epidx_exists(epAddr))
                 {
-                    println!("usbd: invalid [CLEAR|SET]_FEATURE wIndex {:x}", pkt.wIndex);
+                    //println!("usbd: invalid [CLEAR|SET]_FEATURE wIndex {:x}", pkt.wIndex);
                     return self.setup_ack();
                 }
                 
@@ -1926,18 +1924,18 @@ impl UsbDevice
             }
             else
             {
-                println!("usbd: invalid HOST2DEV_EP bRequest {:x}", pkt.bRequest);
+                //println!("usbd: invalid HOST2DEV_EP bRequest {:x}", pkt.bRequest);
                 return self.setup_ack();
             }
         }
         else if (pkt.bmRequestType == UsbSetupRequestType::DEV2HOST_INTERFACE_CLASS as u8)
         {
-            println!("usbd: invalid DEV2HOST_INTERFACE_CLASS bRequest {:x}", pkt.bRequest);
+            //println!("usbd: invalid DEV2HOST_INTERFACE_CLASS bRequest {:x}", pkt.bRequest);
             return self.setup_ack();
         }
         else if (pkt.bmRequestType == UsbSetupRequestType::HOST2DEV_INTERFACE_CLASS as u8)
         {
-            println!("usbd: invalid HOST2DEV_INTERFACE_CLASS bRequest {:x}", pkt.bRequest);
+            //println!("usbd: invalid HOST2DEV_INTERFACE_CLASS bRequest {:x}", pkt.bRequest);
             return self.setup_ack();
         }
         else
