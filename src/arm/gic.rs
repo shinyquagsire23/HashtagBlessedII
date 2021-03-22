@@ -423,4 +423,14 @@ impl GIC
     {
         self.gicc.gicc_dir.w32(val);
     }
+    
+    pub fn disable_distribution(&mut self)
+    {
+        self.gicd.disable_distribution();
+    }
+    
+    pub fn enable_distribution(&mut self)
+    {
+        self.gicd.enable_distribution();
+    }
 }

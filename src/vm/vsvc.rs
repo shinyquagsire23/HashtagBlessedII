@@ -8,3 +8,13 @@ pub fn vsvc_init()
 {
 
 }
+
+pub const fn vsvc_get_pid_name<'a>(pid: &'a u8) -> &'a str
+{
+    return ""; //TODO
+}
+
+pub const fn vsvc_get_curpid_name() -> &'static str
+{
+    return ""; //TODO
+}

@@ -17,6 +17,7 @@ use crate::vm::virq::*;
 use crate::task::*;
 use crate::task::sleep::*;
 use crate::arm::ticks::*;
+use crate::util::*;
 
 static LOGGER_MUTEX: spin::Mutex<()> = spin::Mutex::new(());
 
@@ -207,4 +208,21 @@ pub fn logu16(data: u16)
 pub fn logu8(data: u8)
 {
     println!("{:02x}", data);
+}
+
+pub fn hexdump(prefix: &str, addr: u64, len: usize)
+{
+    println!("{}:", prefix);
+    for i in 0..len
+    {
+        let byte = peek8(addr + i as u64);
+        
+        if (i != 0 && (i % 16) == 0)
+        {
+            println!("");
+        }
+        
+        print!(" {:02x}", byte);
+    }
+    println!("");
 }

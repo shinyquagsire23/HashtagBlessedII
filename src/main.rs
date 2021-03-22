@@ -38,6 +38,7 @@ mod usbd;
 mod vm;
 mod modules;
 mod task;
+mod exception_handler;
 
 use heap::HtbHeap;
 use util::*;
@@ -66,6 +67,7 @@ use task::executor::*;
 use task::sleep::*;
 use arm::ticks::*;
 use arm::threading::get_core;
+use exception_handler::*;
 
 global_asm!(include_str!("start.s"));
 
@@ -80,7 +82,7 @@ pub extern "C" fn main_warm()
 {
     let mut uart_a: UARTDevice = UARTDevice::new(UartA);
     
-    println!("Yo from EL2");
+    println!("core {}: Yo from EL2", get_core());
     timer_wait(1000000);
 }
 
@@ -130,7 +132,8 @@ pub extern "C" fn main_cold()
     println!("");
     println!("Waddup from EL2!");
     
-    while (!cdc_active()){timer_wait(1);}
+    //while (!cdc_active()){timer_wait(1);}
+    timer_wait(4000000);
     cdc_enable();
     
     println!("USB connection recovered!");
@@ -242,17 +245,13 @@ async fn blink_task()
 }
 
 #[no_mangle]
-pub extern "C" fn exception_handle() 
+pub extern "C" fn exception_handle(which: i32, ctx: u64) -> u64
 {
-    critical_start();
-
-    logger_unsafe_override();
-    log_process();
-    
-    println_unsafe!("exception?");
-    timer_wait(1000000);
-    unsafe { t210_reset(); }
-    loop{}
+    unsafe
+    {
+    let mut ctx_slice = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x80);
+    return handle_exception(which, ctx_slice);
+    }
 }
 
 #[no_mangle]

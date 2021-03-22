@@ -13,8 +13,8 @@ const LV1_RANGE_SIZE: u64 = (0x040000000);
 const LV2_RANGE_SIZE: u64 = (0x000200000);
 const LV3_RANGE_SIZE: u64 = (0x000001000);
 
-const VTTBR_BLOCK_OR_VAL: u64 = (0x000000000004C5);
-const VTTBR_PAGE_OR_VAL_IO: u64 = (0x000000000004C7);
+const VTTBR_BLOCK_OR_VAL:    u64 = (0x000000000004C5);
+const VTTBR_PAGE_OR_VAL_IO:  u64 = (0x000000000004C7);
 const VTTBR_PAGE_OR_VAL_MEM: u64 = (0x000000000004FF);
 // SH[1:0] << 8
 // S2AP[1:0] << 6
@@ -29,11 +29,11 @@ extern "C" {
     static __vttbr_lv3_slab: u32;
 }
 
-static mut vttbr_lv1: u64 = 0;
-static mut vttbr_lv2_slab: u64 = 0;
-static mut vttbr_lv3_slab: u64 = 0;
-static mut vttbr_lv2_slab_idx: usize = 0;
-static mut vttbr_lv3_slab_idx: usize = 0;
+static mut VTTBR_LV1: u64 = 0;
+static mut VTTBR_LV2_SLAB: u64 = 0;
+static mut VTTBR_LV3_SLAB: u64 = 0;
+static mut VTTBR_LV2_SLAB_IDX: usize = 0;
+static mut VTTBR_LV3_SLAB_IDX: usize = 0;
 
 pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
 {
@@ -81,11 +81,11 @@ pub fn vttbr_init()
 {
     unsafe
     {
-        vttbr_lv1 = to_u64ptr!(&__vttbr_lv1);
-        vttbr_lv2_slab = to_u64ptr!(&__vttbr_lv2_slab);
-        vttbr_lv3_slab = to_u64ptr!(&__vttbr_lv3_slab);
+        VTTBR_LV1 = to_u64ptr!(&__vttbr_lv1);
+        VTTBR_LV2_SLAB = to_u64ptr!(&__vttbr_lv2_slab);
+        VTTBR_LV3_SLAB = to_u64ptr!(&__vttbr_lv3_slab);
         
-        println!("{:016x} {:016x} {:016x}", vttbr_lv1, vttbr_lv2_slab, vttbr_lv3_slab);
+        println!("{:016x} {:016x} {:016x}", VTTBR_LV1, VTTBR_LV2_SLAB, VTTBR_LV3_SLAB);
     }
 }
 
@@ -93,8 +93,8 @@ pub fn vttbr_new_lv3_pagetable(start_addr: u64) -> u64
 {
     unsafe
     {
-        let page_ent: u64 = vttbr_lv3_slab + (vttbr_lv3_slab_idx * 0x1000) as u64;
-        vttbr_lv3_slab_idx += 1;
+        let page_ent: u64 = VTTBR_LV3_SLAB + (VTTBR_LV3_SLAB_IDX * 0x1000) as u64;
+        VTTBR_LV3_SLAB_IDX += 1;
         memset32(page_ent, 0, 0x1000);
         
         for i in 0..(0x1000/8)
@@ -171,8 +171,8 @@ pub fn vttbr_new_lv2_pagetable(start_addr: u64) -> u64
     unsafe
     {
         println!("Begin construct VTTBR lv2");
-        let page_ent: u64 = vttbr_lv2_slab + (vttbr_lv2_slab_idx * 0x1000) as u64;
-        vttbr_lv2_slab_idx += 1;
+        let page_ent: u64 = VTTBR_LV2_SLAB + (VTTBR_LV2_SLAB_IDX * 0x1000) as u64;
+        VTTBR_LV2_SLAB_IDX += 1;
 
         println!("lv2 {:016x} for start_addr {:016x}", page_ent, start_addr);
         memset32(page_ent, 0, 0x1000);
@@ -196,20 +196,20 @@ pub fn vttbr_construct()
     unsafe
     {
         println!("Begin construct VTTBR lv1");
-        println!("lv1 {:016x}", vttbr_lv1);
+        println!("lv1 {:016x}", VTTBR_LV1);
         
         let entries = 8;
         for i in 0..entries
         {
             if (i <= 8) {
-                poke64(vttbr_lv1 + i*8, vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE));//(i * LV1_RANGE_SIZE) | VTTBR_BLOCK_OR_VAL;
+                poke64(VTTBR_LV1 + i*8, vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE));//(i * LV1_RANGE_SIZE) | VTTBR_BLOCK_OR_VAL;
             }
             else if (i > 8) {
-                poke64(vttbr_lv1 + i*8, 0);//vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE);
+                poke64(VTTBR_LV1 + i*8, 0);//vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE);
             }
         }
         
-        dcache_flush(vttbr_lv1, 8*entries as usize);
-        vttbr_apply(vttbr_lv1);
+        dcache_flush(VTTBR_LV1, 8*entries as usize);
+        vttbr_apply(VTTBR_LV1);
     }
 }

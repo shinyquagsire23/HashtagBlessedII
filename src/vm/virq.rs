@@ -272,10 +272,14 @@ pub fn virq_handle() -> u64
 
 pub fn critical_start()
 {
-    unsafe { asm!("msr daifset, #0xf"); }
+    //unsafe { asm!("msr daifset, #0xf"); }
+    let mut gic: GIC = GIC::new();
+    gic.disable_distribution();
 }
 
 pub fn critical_end()
 {
-    unsafe { asm!("msr daifclr, #0xf"); }
+    //unsafe { asm!("msr daifclr, #0xf"); }
+    let mut gic: GIC = GIC::new();
+    gic.enable_distribution();
 }

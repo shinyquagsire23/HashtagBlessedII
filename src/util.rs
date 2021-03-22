@@ -91,6 +91,22 @@ pub fn poke16(addr: u64, val: u16) {
 }
 
 #[inline(always)]
+pub fn peek8(addr: u64) -> u8 {
+    unsafe {
+        let mut_reg: *mut u8 = (addr) as _;
+        return mut_reg.read_volatile();
+    }
+}
+
+#[inline(always)]
+pub fn poke8(addr: u64, val: u8) {
+    unsafe {
+        let mut_reg: *mut u8 = (addr) as _;
+        mut_reg.write_volatile(val);
+    }
+}
+
+#[inline(always)]
 pub fn memset_iou32(addr: u64, val: u32, len: usize) {
     unsafe {
         let aligned_len = (len + 3) & !0x3;

@@ -41,3 +41,48 @@ pub fn get_elr_el2() -> u64
         return _get_elr_el2();
     }
 }
+
+#[inline(always)]
+pub fn get_esr_el2() -> u32
+{
+    unsafe
+    {
+        return _get_esr_el2();
+    }
+}
+
+#[inline(always)]
+pub fn get_elr_el1() -> u64
+{
+    unsafe
+    {
+        return _get_elr_el1();
+    }
+}
+
+#[inline(always)]
+pub fn get_esr_el1() -> u32
+{
+    unsafe
+    {
+        return _get_esr_el1();
+    }
+}
+
+#[inline(always)]
+pub fn get_afsr0_el1() -> u32
+{
+    unsafe
+    {
+        return _get_afsr0_el1();
+    }
+}
+
+#[inline(always)]
+pub fn get_afsr1_el1() -> u32
+{
+    unsafe
+    {
+        return _get_afsr1_el1();
+    }
+}
