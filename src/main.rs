@@ -68,6 +68,7 @@ use task::sleep::*;
 use arm::ticks::*;
 use arm::threading::get_core;
 use exception_handler::*;
+use vm::vsysreg::*;
 
 global_asm!(include_str!("start.s"));
 
@@ -80,10 +81,22 @@ static HEAP_RES: [u8; 0x100000] = [0; 0x100000];
 #[no_mangle]
 pub extern "C" fn main_warm() 
 {
-    let mut uart_a: UARTDevice = UARTDevice::new(UartA);
+    // TODO is this needed...?
+    //dcache_invalidate(0xD0000000, 0x2000000);
+    println!("Hello from core {}! {:016x}", get_core(), vsysreg_getticks());
+
+    vttbr_transfer_newcore();
     
-    println!("core {}: Yo from EL2", get_core());
-    timer_wait(1000000);
+    let mut gic: GIC = GIC::new();
+    gic.init();
+    irq_timer_init(&mut gic);
+
+    timer_trap_el1_access();
+
+    println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
+    unsafe { drop_to_el1(KERNEL_START); }
+    
+    loop{}
 }
 
 pub fn irq_timer_init(gic: &mut GIC)

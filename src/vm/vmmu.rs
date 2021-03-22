@@ -213,3 +213,15 @@ pub fn vttbr_construct()
         vttbr_apply(VTTBR_LV1);
     }
 }
+
+pub fn vttbr_transfer_newcore()
+{
+    unsafe
+    {
+        // TODO get these sizes dynamically?
+        dcache_invalidate(VTTBR_LV1, (VTTBR_LV2_SLAB - VTTBR_LV1) as usize);
+        dcache_invalidate(VTTBR_LV2_SLAB, (VTTBR_LV3_SLAB - VTTBR_LV2_SLAB) as usize);
+        dcache_invalidate(VTTBR_LV3_SLAB, 0x2000000);
+        vttbr_apply(VTTBR_LV1);
+    }
+}
