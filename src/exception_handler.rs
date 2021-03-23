@@ -390,12 +390,12 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
     print_context(ctx, is_dabt);  
     
     println!("translate {:016x} -> {:016x} (stage 1 {:016x})", ctx[8], translate_el1_stage12(ctx[8]), translate_el1_stage1(ctx[8]));
-    println!("translate {:016x} -> {:016x} (stage 1 {:016x})", ctx[10], translate_el1_stage12(ctx[10]), translate_el1_stage1(ctx[10]));
+    println!("translate {:016x} -> {:016x} (stage 1 {:016x}) {:x}", ctx[10], translate_el1_stage12(ctx[10]), translate_el1_stage1(ctx[10]), peek64(translate_el1_stage12(ctx[10])));
     //println!("translate {:016x} -> {:016x}\n\r", ctx[31], translate_el1_stage12(ctx[31]));
 
     if (is_dabt_lower)
     {
-        let pc_dump = get_elr_el1() - 16;//ctx[31]-16;
+        let pc_dump = ctx[19]-16;//get_elr_el1() - 16;//ctx[31]-16;
         println!("translated PC {:016x}", translate_el1_stage12(pc_dump));
         println!("");
         if (translate_el1_stage12(pc_dump) >= 0x80000000 && translate_el1_stage12(pc_dump) < 0x200000000) {
@@ -587,7 +587,6 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         unsafe { t210_reset(); }
         loop{}
     }
-
 
     end_ticks = vsysreg_getticks();
     vsysreg_addoffset(end_ticks - start_ticks);

@@ -165,6 +165,7 @@ t210_reset:
 
 exception_print:
     // Store context
+    msr SPSel, #1
     sub sp, sp, #0x200
 
     stp x0, x1, [sp, #0x0]
@@ -190,10 +191,11 @@ exception_print:
     mrs	x0, fpcr
     str	x10, [sp, #0x1F8]
 #endif
-    mrs x0, CurrentEL
-    cmp x0, #0x2
+    mrs x0, spsr_el2
+    and x0, x0, 0xC
+    cmp x0, #(0x2 << 2)
     beq hyp_preserve
-    cmp x0, #0x1
+    cmp x0, #(0x1 << 2)
     beq kern_preserve
 
 user_preserve:
@@ -301,6 +303,7 @@ _do_except:
 
 irq_print:
     // Store context
+    msr SPSel, #1
     sub sp, sp, #0x200
 
     stp x0, x1, [sp, #0x0]
@@ -326,10 +329,11 @@ irq_print:
     mrs	x0, fpcr
     str	x10, [sp, #0x1F8]
 #endif
-    mrs x0, CurrentEL
-    cmp x0, #0x2
+    mrs x0, spsr_el2
+    and x0, x0, 0xC
+    cmp x0, #(0x2 << 2)
     beq irq_hyp_preserve
-    cmp x0, #0x1
+    cmp x0, #(0x1 << 2)
     beq irq_kern_preserve
 
 irq_user_preserve:

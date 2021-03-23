@@ -76,13 +76,17 @@ const KERN_DATA: &[u8] = include_bytes!("../data/0_kernel_80060000.bin");
 
 #[global_allocator]
 static ALLOCATOR: HtbHeap = HtbHeap::empty();
-static HEAP_RES: [u8; 0x100000] = [0; 0x100000];
+
+#[repr(align(0x1000))]
+struct PageAlignedHeapAlloc([u8; 0x100000]);
+
+static HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x100000]);
 
 #[no_mangle]
 pub extern "C" fn main_warm() 
 {
     // TODO is this needed...?
-    dcache_invalidate(0xD0000000, 0x3000000);
+    //dcache_invalidate(0xD0000000, 0x3000000);
     println!("Hello from core {}! {:016x}", get_core(), vsysreg_getticks());
 
     vttbr_transfer_newcore();
@@ -117,7 +121,7 @@ pub extern "C" fn main_cold()
 {
     fpu_enable();
     
-    unsafe { ALLOCATOR.init((&HEAP_RES[0] as *const u8) as usize, 0x100000); }
+    unsafe { ALLOCATOR.init((HEAP_RES.0.as_ptr() as *const u8) as usize, 0x100000); }
     
     let mut uart_a: UARTDevice = UARTDevice::new(UartA);
     uart_a.init(115200);
@@ -189,14 +193,14 @@ pub extern "C" fn main_cold()
             println!("Hooking addr {:016x}", search);
             if (peek32(search + 4) == 0xd63f0160) // A64
             {
-                poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
-                poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
+                //poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
+                //poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
                 a64_hooked = true;
             }
             else if (peek32(search + 4) == 0xd63f0260) // A32
             {
-                poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
-                poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
+                //poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
+                //poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
                 a32_hooked = true;
             }
         }
@@ -263,9 +267,15 @@ pub extern "C" fn exception_handle(which: i32, ctx: u64) -> u64
 }
 
 #[no_mangle]
-pub extern "C" fn irq_handle()  -> u64
+pub extern "C" fn irq_handle(which: i32, ctx: u64)  -> u64
 {
-    return virq_handle();
+    unsafe
+    {
+    // TODO does this memleak?
+    let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
+    return virq_handle(ctx_slice);
+    }
+    
 }
 
 #[panic_handler]

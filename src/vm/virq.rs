@@ -94,7 +94,7 @@ pub fn tegra_irq_ack(id: i32)
 
 // END tegra IRQ
 
-pub fn virq_handle() -> u64
+pub fn virq_handle(ctx: &mut [u64]) -> u64
 {
     let mut gic: GIC = GIC::new();
     
@@ -178,6 +178,7 @@ pub fn virq_handle() -> u64
         
         end_ticks = vsysreg_getticks();
         vsysreg_addoffset(end_ticks - start_ticks);
+
         return get_elr_el2();
     }
     else if (int_id == IRQ_EL2_GIC_MAINTENANCE)
@@ -192,6 +193,7 @@ pub fn virq_handle() -> u64
         
         end_ticks = vsysreg_getticks();
         vsysreg_addoffset(end_ticks - start_ticks);
+        
         return get_elr_el2();
     }
     else if (int_id == IRQ_T210_USB)
@@ -209,6 +211,9 @@ pub fn virq_handle() -> u64
         
         end_ticks = vsysreg_getticks();
         vsysreg_addoffset(end_ticks - start_ticks);
+        
+
+        
         return get_elr_el2();
     }
     else if (iar_int_id != 0x3FF)
@@ -253,6 +258,7 @@ pub fn virq_handle() -> u64
     //TODO
     end_ticks = vsysreg_getticks();
     vsysreg_addoffset(end_ticks - start_ticks);
+    
     return get_elr_el2();
 }
 

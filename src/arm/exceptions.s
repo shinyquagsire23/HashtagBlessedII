@@ -71,3 +71,12 @@ _get_sp_el0:
 	mrs x0, sp_el0
 	ret
 
+.global _get_spsr_el2
+__get_spsr_el2:
+	mrs x0, spsr_el2
+	ret
+	
+.global _get_spsr_el1
+_get_spsr_el1:
+	mrs x0, spsr_el1
+	ret

@@ -16,7 +16,7 @@ version = "0.8.11"
 features = ["const_mut_refs"]
 
 [dependencies.lazy_static]
-version = "0.2.1"
+version = "1.4.0"
 features = ["spin_no_std"]
 
 [dependencies.crossbeam-queue]

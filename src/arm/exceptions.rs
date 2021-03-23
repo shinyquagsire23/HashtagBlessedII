@@ -22,6 +22,8 @@ extern "C" {
     pub fn _get_hpfar_el2() -> u64;
     pub fn _get_far_el2() -> u64;
 
+    pub fn _get_spsr_el2() -> u64;
+    pub fn _get_spsr_el1() -> u64;
 }
 
 #[inline(always)]
@@ -85,4 +87,16 @@ pub fn get_afsr1_el1() -> u32
     {
         return _get_afsr1_el1();
     }
+}
+
+#[inline(always)]
+pub fn get_spsr_el2() -> u64
+{
+    unsafe { return _get_spsr_el2(); }
+}
+
+#[inline(always)]
+pub fn get_spsr_el1() -> u64
+{
+    unsafe { return _get_spsr_el1(); }
 }

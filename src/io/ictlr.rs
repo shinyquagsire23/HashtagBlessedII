@@ -76,6 +76,7 @@ pub struct ICTLRSet
     ICTLR_CPU3_IER_SET: MMIOReg,
     ICTLR_CPU3_IER_CLR: MMIOReg,
     ICTLR_CPU3_IEP_CLASS: MMIOReg,
+    ICTLR_CPU3_IEP_CLASS2: MMIOReg,
 }
 
 impl ICTLRSet
@@ -119,6 +120,7 @@ impl ICTLRSet
             ICTLR_CPU3_IER_SET: MMIOReg::new(baseaddr + 0x9C),
             ICTLR_CPU3_IER_CLR: MMIOReg::new(baseaddr + 0xA0),
             ICTLR_CPU3_IEP_CLASS: MMIOReg::new(baseaddr + 0xA4),
+            ICTLR_CPU3_IEP_CLASS2: MMIOReg::new(baseaddr + 0xAc),
         };
         
         return retval;

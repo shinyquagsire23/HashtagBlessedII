@@ -8,6 +8,7 @@ use crate::arm::cache::*;
 use crate::vm::funcs::*;
 use crate::util::*;
 use crate::arm::threading::get_core;
+use core::mem;
 
 const LV1_RANGE_SIZE: u64 = (0x040000000);
 const LV2_RANGE_SIZE: u64 = (0x000200000);
@@ -20,20 +21,23 @@ const VTTBR_PAGE_OR_VAL_MEM: u64 = (0x000000000004FF);
 // S2AP[1:0] << 6
 // MemAttr[3:0] << 2
 // we want: write-back cacheable, non-sharable
-
 // normal, gathering, reordering, early write ack
 
-extern "C" {
-    static __vttbr_lv1: u32;
-    static __vttbr_lv2_slab: u32;
-    static __vttbr_lv3_slab: u32;
-}
-
-static mut VTTBR_LV1: u64 = 0;
-static mut VTTBR_LV2_SLAB: u64 = 0;
-static mut VTTBR_LV3_SLAB: u64 = 0;
 static mut VTTBR_LV2_SLAB_IDX: usize = 0;
 static mut VTTBR_LV3_SLAB_IDX: usize = 0;
+
+#[repr(align(0x1000))]
+struct Lv1TTB([u64; 64]);
+
+#[repr(align(0x1000))]
+struct Lv2TTB([u64; 0x200*0x800]);
+
+#[repr(align(0x1000))]
+struct Lv3TTB([u64; 0x200*0x2000]);
+
+static mut VTTBR_LV1: Lv1TTB = Lv1TTB([0; 64]);
+static mut VTTBR_LV2_SLAB: Lv2TTB = Lv2TTB([0; 0x200*0x800]);
+static mut VTTBR_LV3_SLAB: Lv3TTB = Lv3TTB([0; 0x200*0x2000]);
 
 pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
 {
@@ -80,12 +84,8 @@ pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
 pub fn vttbr_init()
 {
     unsafe
-    {
-        VTTBR_LV1 = to_u64ptr!(&__vttbr_lv1);
-        VTTBR_LV2_SLAB = to_u64ptr!(&__vttbr_lv2_slab);
-        VTTBR_LV3_SLAB = to_u64ptr!(&__vttbr_lv3_slab);
-        
-        println!("{:016x} {:016x} {:016x}", VTTBR_LV1, VTTBR_LV2_SLAB, VTTBR_LV3_SLAB);
+    {        
+        println!("{:p} {:p} {:p}", &VTTBR_LV1, &VTTBR_LV2_SLAB, &VTTBR_LV3_SLAB);
     }
 }
 
@@ -93,36 +93,35 @@ pub fn vttbr_new_lv3_pagetable(start_addr: u64) -> u64
 {
     unsafe
     {
-        let page_ent: u64 = VTTBR_LV3_SLAB + (VTTBR_LV3_SLAB_IDX * 0x1000) as u64;
+        let slice_start = VTTBR_LV3_SLAB_IDX * 0x200;
+        let slice_end = slice_start + 0x200;
+        let page_ent = VTTBR_LV3_SLAB.0.get_mut(slice_start..slice_end).unwrap();
         VTTBR_LV3_SLAB_IDX += 1;
-        memset32(page_ent, 0, 0x1000);
         
-        for i in 0..(0x1000/8)
+        for i in 0..(0x1000/8) as usize
         {
-            let mut target_addr: u64 = start_addr + (i * LV3_RANGE_SIZE) as u64;
+            let mut target_addr: u64 = start_addr + ((i as u64) * LV3_RANGE_SIZE);
             target_addr = ipaddr_to_paddr(target_addr);
 
             let mut test = 0;
             let or_val = (if target_addr >= 0x80000000 { VTTBR_PAGE_OR_VAL_MEM } else { VTTBR_PAGE_OR_VAL_IO });
             let page_ent_val = or_val | target_addr;
             
-            let arr_offs: u64 = (i*8) as u64;
-            
             if (target_addr >= 0x80000000 && target_addr < 0x200000000) {
-                poke64(page_ent+arr_offs, page_ent_val);
+                page_ent[i] = page_ent_val;
             }
             else if (target_addr >= 0x50044000 && target_addr < 0x50046000)
             {
-                poke64(page_ent+arr_offs, 0);
+                page_ent[i] = 0;
                 test = 1;
             }
             else if (target_addr >= 0x50040000 && target_addr < 0x50042000)
             {
-                poke64(page_ent+arr_offs, page_ent_val); //GICD
+                page_ent[i] = page_ent_val; //GICD
             }
             else if (target_addr >= 0x50042000 && target_addr < 0x50044000)
             {
-                poke64(page_ent+arr_offs, page_ent_val + 0x4000); //GICC
+                page_ent[i] = page_ent_val + 0x4000; //GICC
             }
             /*else if (target_addr >= 0x700b0000 && target_addr < 0x700c0000)
             {
@@ -135,7 +134,7 @@ pub fn vttbr_new_lv3_pagetable(start_addr: u64) -> u64
                      || (target_addr >= 0x6000d000 && target_addr < 0x6000E000)*/ // gpio 
                      /*|| (target_addr >= 0x700b0000 && target_addr < 0x700c0000)*/  // sdmmc
                      ) {
-                poke64(page_ent+arr_offs, 0);
+                page_ent[i] = 0;
             }
             //else if (target_addr >= 0x01000000 && target_addr < 0x7d000000) //target_addr >= 0x700b0000 && target_addr < 0x700c0000
             //{
@@ -143,26 +142,22 @@ pub fn vttbr_new_lv3_pagetable(start_addr: u64) -> u64
             //}
             else if (target_addr == 0x7001b000 || target_addr == 0x702ec000 || target_addr == 0x54300000) // HOS is mean.
             {
-                poke64(page_ent+arr_offs, page_ent_val);
+                page_ent[i] = page_ent_val;
             }
             else
             {
-                poke64(page_ent+arr_offs, page_ent_val);
+                page_ent[i] = page_ent_val;
                 test = 2;
             }
-            
-            /*if (start_addr >= 0x00000000 && start_addr < 0x60000000) {
-                poke64(page_ent+arr_offs, start_addr | or_val);
-            }*/
 
             if (target_addr == 0x80060000) {
-                println!("80060000 -> {:08x} {:x}", peek64(page_ent+arr_offs), test);
+                println!("80060000 -> {:08x} {:x}", page_ent[i], test);
             }
         }
         
-        dcache_flush(page_ent,0x1000);
+        dcache_flush(to_u64ptr!(page_ent.as_ptr()),0x1000);
         
-        return page_ent | 0b11;
+        return to_u64ptr!(page_ent.as_ptr()) | 0b11;
     }
 }
 
@@ -171,23 +166,24 @@ pub fn vttbr_new_lv2_pagetable(start_addr: u64) -> u64
     unsafe
     {
         println!("Begin construct VTTBR lv2");
-        let page_ent: u64 = VTTBR_LV2_SLAB + (VTTBR_LV2_SLAB_IDX * 0x1000) as u64;
+        let slice_start = VTTBR_LV2_SLAB_IDX * 0x200;
+        let slice_end = slice_start + 0x200;
+        let page_ent = VTTBR_LV2_SLAB.0.get_mut(slice_start..slice_end).unwrap();
         VTTBR_LV2_SLAB_IDX += 1;
 
-        println!("lv2 {:016x} for start_addr {:016x}", page_ent, start_addr);
-        memset32(page_ent, 0, 0x1000);
+        println!("lv2 {:p} for start_addr {:016x}", page_ent.as_ptr(), start_addr);
 
         for i in 0..(0x1000/8)
         {
-            let target_addr: u64 = (start_addr + (i * LV2_RANGE_SIZE) as u64);
+            let target_addr: u64 = (start_addr + ((i as u64) * LV2_RANGE_SIZE));
             
             //poke64(page_ent + i*8, VTTBR_BLOCK_OR_VAL | target_addr);
-            poke64(page_ent + i*8, vttbr_new_lv3_pagetable(target_addr));
+            page_ent[i] = vttbr_new_lv3_pagetable(target_addr);
         }
         
-        dcache_flush(page_ent, 0x1000);
+        dcache_flush(to_u64ptr!(page_ent.as_ptr()), 0x1000);
         
-        return page_ent | 0b11;
+        return to_u64ptr!(page_ent.as_ptr()) | 0b11;
     }
 }
 
@@ -196,21 +192,21 @@ pub fn vttbr_construct()
     unsafe
     {
         println!("Begin construct VTTBR lv1");
-        println!("lv1 {:016x}", VTTBR_LV1);
-        
+        println!("lv1 {:p} {:x}", VTTBR_LV1.0.as_ptr(), mem::size_of::<Lv1TTB>());
+
         let entries = 32;
         for i in 0..entries
         {
             if (i <= 8) {
-                poke64(VTTBR_LV1 + i*8, vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE));//(i * LV1_RANGE_SIZE) | VTTBR_BLOCK_OR_VAL;
+                VTTBR_LV1.0[i] = vttbr_new_lv2_pagetable(i as u64 * LV1_RANGE_SIZE);//(i * LV1_RANGE_SIZE) | VTTBR_BLOCK_OR_VAL;
             }
             else if (i > 8) {
-                poke64(VTTBR_LV1 + i*8, 0); // vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE)
+                VTTBR_LV1.0[i] = 0; // vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE)
             }
         }
         
-        dcache_flush(VTTBR_LV1, 8*entries as usize);
-        vttbr_apply(VTTBR_LV1);
+        dcache_flush(to_u64ptr!(VTTBR_LV1.0.as_ptr()), mem::size_of::<Lv1TTB>());
+        vttbr_apply(VTTBR_LV1.0.as_ptr());
     }
 }
 
@@ -219,9 +215,9 @@ pub fn vttbr_transfer_newcore()
     unsafe
     {
         // TODO get these sizes dynamically?
-        dcache_invalidate(VTTBR_LV1, (VTTBR_LV2_SLAB - VTTBR_LV1) as usize);
-        dcache_invalidate(VTTBR_LV2_SLAB, (VTTBR_LV3_SLAB - VTTBR_LV2_SLAB) as usize);
-        dcache_invalidate(VTTBR_LV3_SLAB, 0x2000000);
-        vttbr_apply(VTTBR_LV1);
+        dcache_invalidate(to_u64ptr!(VTTBR_LV1.0.as_ptr()), mem::size_of::<Lv1TTB>());
+        dcache_invalidate(to_u64ptr!(VTTBR_LV2_SLAB.0.as_ptr()), mem::size_of::<Lv2TTB>());
+        dcache_invalidate(to_u64ptr!(VTTBR_LV3_SLAB.0.as_ptr()), mem::size_of::<Lv3TTB>());
+        vttbr_apply(VTTBR_LV1.0.as_ptr());
     }
 }
