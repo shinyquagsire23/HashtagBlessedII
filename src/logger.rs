@@ -170,7 +170,7 @@ pub fn log_process()
                     }
                 }
                 
-                log_uarta_raw(&data[0..next_line]);
+                //log_uarta_raw(&data[0..next_line]);
                 log_usb_raw(&data[0..next_line]);
                 
                 let data_len = data.len();

@@ -389,15 +389,17 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
     
     print_context(ctx, is_dabt);  
     
-    println!("translate {:016x} -> {:016x} (stage 1 {:016x})", ctx[9], translate_el1_stage12(ctx[9]), translate_el1_stage1(ctx[9]));
+    println!("translate {:016x} -> {:016x} (stage 1 {:016x})", ctx[8], translate_el1_stage12(ctx[8]), translate_el1_stage1(ctx[8]));
+    println!("translate {:016x} -> {:016x} (stage 1 {:016x})", ctx[10], translate_el1_stage12(ctx[10]), translate_el1_stage1(ctx[10]));
     //println!("translate {:016x} -> {:016x}\n\r", ctx[31], translate_el1_stage12(ctx[31]));
 
     if (is_dabt_lower)
     {
-        println!("translated PC {:016x}", translate_el1_stage12(ctx[31]));
+        let pc_dump = get_elr_el1() - 16;//ctx[31]-16;
+        println!("translated PC {:016x}", translate_el1_stage12(pc_dump));
         println!("");
-        if (translate_el1_stage12(ctx[31]) >= 0x80000000 && translate_el1_stage12(ctx[31]) < 0x200000000) {
-            hexdump("dump @ PC ", translate_el1_stage12(ctx[31]-16), 0x60);
+        if (translate_el1_stage12(pc_dump) >= 0x80000000 && translate_el1_stage12(pc_dump) < 0x200000000) {
+            hexdump("dump @ PC ", translate_el1_stage12(pc_dump), 0x60);
         }
     }
     
@@ -427,11 +429,6 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         ec = (esr_el1 >> 26) as u8;
         iss = esr_el1 & 0x1FFFFFF;
 
-        if (hvc_num == 0 && ec != 0x15)
-        {
-            //println!("(core {}) ec {:x} {:016x}", get_core(), ec, get_elr_el2());
-        }
-
         if (hvc_num == 1)
         {
             // emulate ff 42 03 d5     msr        DAIFClr,#0x2
@@ -444,7 +441,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             }
 
             //TODO
-            //ret_addr = vsvc_pre_handle((u8)iss, ctx);
+            ret_addr = vsvc_pre_handle(iss, ctx);
         }
         else if (hvc_num == 2) // SVC post-hook
         {
@@ -458,7 +455,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             }
 
             //TODO
-            //ret_addr = vsvc_post_handle((u8)iss, ctx);
+            ret_addr = vsvc_post_handle(iss, ctx);
         }
         else if (hvc_num == 3)
         {
@@ -535,6 +532,14 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
             ret_addr = get_elr_el2();
         }
+        
+        
+        if (hvc_num == 0 && ec != 0x15)
+        {
+            println!("(core {}) ec {:x} {:016x}", get_core(), ec, get_elr_el2());
+            ctx[17] = ctx[16] & 0x3F;
+            ret_addr = get_elr_el2();
+        }
         //mutex_unlock(&exception_print_mutex);
     }
     else if (ec == EC_MSRMRS)
@@ -544,7 +549,9 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
     }
     else if (ec == EC_SMC64)
     {
+        if (ctx[0] == 0x00000000c3000002) {
         //print_exception(ec, iss, ctx, ret_addr);
+        }
         ret_addr = vsmc_handle(iss, ctx);
     }
     else if (ec == EC_DABT_LOWER_EL && ((iss & bit!(24)) != 0))

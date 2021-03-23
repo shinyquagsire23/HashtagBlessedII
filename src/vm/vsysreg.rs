@@ -6,7 +6,11 @@
 
 use crate::arm::exceptions::*;
 use crate::arm::threading::*;
+use crate::arm::mmu::*;
 use crate::exception_handler::*;
+use crate::util::*;
+
+static mut HAS_HOOKED_EXCEPTIONS: bool = false;
 
 pub fn vsysreg_getticks() -> u64
 {
@@ -124,6 +128,24 @@ pub fn vsysreg_handle(iss: u32, ctx: &mut [u64]) -> u64
         {
             let val = ctx[rt as usize];
             asm!("msr CONTEXTIDR_EL1, {0}", in(reg) val);
+            
+            let mut val_vbar: u64 = 0;
+	        asm!("mrs {0}, VBAR_EL1", out(reg) val_vbar);
+	        //printf("(core %u) VBAR_EL1 %016llx\n\r", get_core(), val_vbar);
+
+            if (!HAS_HOOKED_EXCEPTIONS && val_vbar != 0)
+            {
+                let vbar_ptr = translate_el1_stage12(val_vbar);
+
+                // clrex
+                // hvc #0
+                // b exception_handler
+                poke32(vbar_ptr + 0x408, peek32(vbar_ptr + 0x404) - 1); // adjust branch
+                poke32(vbar_ptr + 0x404, peek32(vbar_ptr + 0x400)); // clrex first
+                poke32(vbar_ptr + 0x400, 0xd4000002 | (0 << 5)); // HVC #0 instruction
+
+                HAS_HOOKED_EXCEPTIONS = true;
+            }
         }
         else if (opc1 == 3 && crn == 14 && crm == 2 && opc2 == 1)
         {

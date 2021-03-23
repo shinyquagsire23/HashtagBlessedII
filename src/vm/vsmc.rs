@@ -12,6 +12,7 @@ use crate::vm::vmmu::*;
 use crate::util::*;
 use crate::arm::mmu::*;
 use crate::exception_handler::*;
+use crate::io::smmu::*;
 
 extern "C"
 {
@@ -52,12 +53,12 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     }
 
 
-    /*if (smc_cmd == SMC_RWREGISTER && ctx[1] >= MC_BASE && ctx[1] < MC_END)
+    if (smc_cmd == SMC_RWREGISTER && ctx[1] >= MC_BASE && ctx[1] < MC_END)
     {
         smmu_handle_rwreg(ctx);
         silence_print = true;
     }
-    else*/ if (smc_cmd == SMC_CONFIGURECARVEOUT)
+    else if (smc_cmd == SMC_CONFIGURECARVEOUT)
     {
         ctx[2] = ipaddr_to_paddr(ctx[2]);
     }
@@ -71,7 +72,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     }
     else if (smc_cmd == SMC0_GENAESKEK || smc_cmd == SMC0_COMPUTEAES || smc_cmd == SMC0_COMPUTECMAC || smc_cmd == SMC0_GETCONFIG/* || smc_cmd == SMC_GENRANDOMBYTES || smc_cmd == SMC_GETCONFIG*/)
     {
-        silence_print = true;
+        //silence_print = true;
     }
 
     if (!silence_print)
@@ -80,7 +81,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
         println!("          (X4 = {:016x}, X5 = {:016x}, X6 = {:016x}, X7 = {:016x})", ctx[4], ctx[5], ctx[6], ctx[7]);
     }
 
-    if (smc_cmd == SMC0_GETCONFIG && ctx[1] == 65000)
+/*    if (smc_cmd == SMC0_GETCONFIG && ctx[1] == 65000)
     {
         ctx[0] = 0;
         ctx[1] = (0x08000100 | (8<<32) | (0<<40) | (9<<48)|(0<<56));
@@ -127,7 +128,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     {
         ctx[0] = 0;
         return retaddr;
-    }
+    }*/
     // end atmosphere junk
 
     if (smc_cmd == SMC_PANIC) {
@@ -135,16 +136,59 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     }
 
     if (smc_which == 1) {
-        unsafe { smc1_shim(to_u64ptr!(&ctx[0])); }
+        unsafe { smc1_shim(ctx.as_mut_ptr()); }
     }
     else if (smc_which == 0) {
-        unsafe { smc0_shim(to_u64ptr!(&ctx[0])); }
+        unsafe { smc0_shim(ctx.as_mut_ptr()); }
+    }
+    
+    if (!silence_print)
+    {
+        println!("(core {}) ret SMC #{} Smc{} (X0 = {:016x}, X1 = {:016x}, X2 = {:016x}, X3 = {:016x})", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0], ctx[1], ctx[2], ctx[3]);
+        println!("          (X4 = {:016x}, X5 = {:016x}, X6 = {:016x}, X7 = {:016x})", ctx[4], ctx[5], ctx[6], ctx[7]);
     }
 
     if (ctx[0] != 0)
     {
         println!("(core {}) SMC #{} Smc{} returned {:08x}", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0]);
     }
+    
+/*    if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_PROGRAMVERIFY)
+    {
+        ctx[0] = 0;
+        ctx[1] |= 1;//1;
+    }
+    else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_KERNELCONFIG)
+    {
+        ctx[0] = 0;
+        ctx[1] |= (1 << 8);
+    }
+    else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_ISDEBUGMODE)
+    {
+        ctx[0] = 0;
+        ctx[1] = 1;//1;
+    }
+    else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_ISRECOVERYBOOT)
+    {
+        ctx[0] = 0;
+        //ctx[1] = 1;
+        ctx[1] = 0;
+    }
+    else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_HWTYPE)
+    {
+        ctx[0] = 0;
+        ctx[1] = 0;
+    }
+    else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_ISRETAIL)
+    {
+        ctx[0] = 0;
+        ctx[1] = 1;
+    }
+    else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_BOOTREASON)
+    {
+        ctx[0] = 0;
+        ctx[1] = 2;
+    }*/
 
     return retaddr;
 }

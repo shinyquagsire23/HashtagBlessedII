@@ -28,9 +28,9 @@ mod heap;
 #[macro_use]
 extern crate lazy_static;
 
-mod io;
-
 #[macro_use] mod logger;
+
+mod io;
 
 mod hos;
 mod arm;
@@ -82,7 +82,7 @@ static HEAP_RES: [u8; 0x100000] = [0; 0x100000];
 pub extern "C" fn main_warm() 
 {
     // TODO is this needed...?
-    //dcache_invalidate(0xD0000000, 0x2000000);
+    dcache_invalidate(0xD0000000, 0x3000000);
     println!("Hello from core {}! {:016x}", get_core(), vsysreg_getticks());
 
     vttbr_transfer_newcore();
@@ -153,7 +153,7 @@ pub extern "C" fn main_cold()
     println!("");
     println!("Waddup from EL2!");
     
-    time_out = 10000;
+    time_out = 30000;
     while (!cdc_active() && time_out > 0)
     {
         timer_wait(1000);
@@ -205,6 +205,12 @@ pub extern "C" fn main_cold()
         
         search += 4;
     }
+    
+    
+    //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x584, 0xd4000002); // lowerel serror
+    //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x784, 0xd4000002); // lowerel serror
+    
+    poke32(ipaddr_to_paddr(KERNEL_START) + 0x4bcc0, 0xd4000002); // el0 dabt/iabt
 
     // Finalize things
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
@@ -250,7 +256,8 @@ pub extern "C" fn exception_handle(which: i32, ctx: u64) -> u64
 {
     unsafe
     {
-    let mut ctx_slice = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x80);
+    // TODO does this memleak?
+    let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
     return handle_exception(which, ctx_slice);
     }
 }

@@ -6,6 +6,7 @@
  
 use crate::util::*;
 use crate::arm::threading::*;
+use crate::vm::virq::*;
 
 pub const GICD_BASE: u32 = 0x50041000;
 pub const GICC_BASE: u32 = 0x50042000;
@@ -14,66 +15,66 @@ pub const GICV_BASE: u32 = 0x50046000;
 
 pub struct GICDRegs
 {
-    gicd_ctlr: MMIOReg,
-    gicd_typer: MMIOReg,
-    gicd_iidr: MMIOReg,
-    gicd_igroupr: MMIOReg,
-    gicd_isenabler: MMIOReg,
-    gicd_icenabler: MMIOReg,
-    gicd_ispendr: MMIOReg,
-    gicd_icpendr: MMIOReg,
-    gicd_icdabr: MMIOReg,
-    gicd_icactiver: MMIOReg,
-    gicd_ipriorityr: MMIOReg,
-    gicd_itargetsr: MMIOReg,
-    gicd_icfgr: MMIOReg,
-    gicd_sgir: MMIOReg,
-    gicd_cpendsgir: MMIOReg,
-    gicd_spendsgir: MMIOReg,
+    pub gicd_ctlr: MMIOReg,
+    pub gicd_typer: MMIOReg,
+    pub gicd_iidr: MMIOReg,
+    pub gicd_igroupr: MMIOReg,
+    pub gicd_isenabler: MMIOReg,
+    pub gicd_icenabler: MMIOReg,
+    pub gicd_ispendr: MMIOReg,
+    pub gicd_icpendr: MMIOReg,
+    pub gicd_icdabr: MMIOReg,
+    pub gicd_icactiver: MMIOReg,
+    pub gicd_ipriorityr: MMIOReg,
+    pub gicd_itargetsr: MMIOReg,
+    pub gicd_icfgr: MMIOReg,
+    pub gicd_sgir: MMIOReg,
+    pub gicd_cpendsgir: MMIOReg,
+    pub gicd_spendsgir: MMIOReg,
 }
 
 pub struct GICCRegs
 {
-    gicc_ctlr: MMIOReg,
-    gicc_pmr: MMIOReg,
-    gicc_bpr: MMIOReg,
-    gicc_iar: MMIOReg,
-    gicc_eoir: MMIOReg,
-    gicc_rpr: MMIOReg,
-    gicc_hppir: MMIOReg,
-    gicc_apr: MMIOReg,
-    gicc_nsapr: MMIOReg,
-    gicc_iidr: MMIOReg,
-    gicc_dir: MMIOReg
+    pub gicc_ctlr: MMIOReg,
+    pub gicc_pmr: MMIOReg,
+    pub gicc_bpr: MMIOReg,
+    pub gicc_iar: MMIOReg,
+    pub gicc_eoir: MMIOReg,
+    pub gicc_rpr: MMIOReg,
+    pub gicc_hppir: MMIOReg,
+    pub gicc_apr: MMIOReg,
+    pub gicc_nsapr: MMIOReg,
+    pub gicc_iidr: MMIOReg,
+    pub gicc_dir: MMIOReg
 }
 
 pub struct GICHRegs
 {
-    gich_hcr: MMIOReg,
-    gich_vtr: MMIOReg,
-    gich_vmcr: MMIOReg,
-    gich_misr: MMIOReg,
-    gich_eisr0: MMIOReg,
-    gich_eisr1: MMIOReg,
-    gich_elsr0: MMIOReg,
-    gich_elsr1: MMIOReg,
-    gich_apr: MMIOReg,
-    gich_lr: MMIOReg, // 0x100 ... 0x1FC
+    pub gich_hcr: MMIOReg,
+    pub gich_vtr: MMIOReg,
+    pub gich_vmcr: MMIOReg,
+    pub gich_misr: MMIOReg,
+    pub gich_eisr0: MMIOReg,
+    pub gich_eisr1: MMIOReg,
+    pub gich_elsr0: MMIOReg,
+    pub gich_elsr1: MMIOReg,
+    pub gich_apr: MMIOReg,
+    pub gich_lr: MMIOReg, // 0x100 ... 0x1FC
 }
 
 pub struct GICVRegs
 {
-    gicv_ctlr: MMIOReg,
-    gicv_pmr: MMIOReg,
-    gicv_bpr: MMIOReg,
-    gicv_iar: MMIOReg,
-    gicv_eoir: MMIOReg,
-    gicv_rpr: MMIOReg,
-    gicv_hppir: MMIOReg,
-    gicv_apr: MMIOReg,
-    gicv_nsapr: MMIOReg,
-    gicv_iidr: MMIOReg,
-    gicv_dir: MMIOReg,
+    pub gicv_ctlr: MMIOReg,
+    pub gicv_pmr: MMIOReg,
+    pub gicv_bpr: MMIOReg,
+    pub gicv_iar: MMIOReg,
+    pub gicv_eoir: MMIOReg,
+    pub gicv_rpr: MMIOReg,
+    pub gicv_hppir: MMIOReg,
+    pub gicv_apr: MMIOReg,
+    pub gicv_nsapr: MMIOReg,
+    pub gicv_iidr: MMIOReg,
+    pub gicv_dir: MMIOReg,
 }
 
 impl GICDRegs
@@ -321,11 +322,15 @@ impl GICVRegs
 
 pub struct GIC
 {
-    gicd: GICDRegs,
-    gicc: GICCRegs,
-    gich: GICHRegs,
-    gicv: GICVRegs,
+    pub gicd: GICDRegs,
+    pub gicc: GICCRegs,
+    pub gich: GICHRegs,
+    pub gicv: GICVRegs,
 }
+
+pub const LR_QUEUE_SIZE: usize = 2048;
+static mut LR_QUEUEPOSES: [u32; 8] = [0; 8];
+static mut CPU_LR_QUEUES: [[u32; LR_QUEUE_SIZE]; 8] = [[0; LR_QUEUE_SIZE]; 8];
 
 impl GIC
 {
@@ -399,9 +404,9 @@ impl GIC
         return (self.gicc.gicc_iar.r32());
     }
     
-    pub fn get_iar_vcpu(&mut self) -> u32
+    pub fn get_iar_vcpu(&mut self) -> u8
     {
-        return (self.get_iar() >> 10) & 0x7;
+        return ((self.get_iar() >> 10) & 0x7) as u8;
     }
     
     pub fn get_iar_int_id(&mut self) -> u16
@@ -432,5 +437,216 @@ impl GIC
     pub fn enable_distribution(&mut self)
     {
         self.gicd.enable_distribution();
+    }
+    
+    pub fn cpu_lr_queue_push(&mut self, lr_val: u32)
+    {
+        unsafe
+        {
+        if (LR_QUEUEPOSES[get_core() as usize] >= LR_QUEUE_SIZE as u32)
+        {
+            println!("(core {}) !! LR QUEUE EXHAUSTED! {:x}", get_core(), lr_val);
+            return;
+        }
+        let queue_pos = LR_QUEUEPOSES[get_core() as usize] as usize;
+        CPU_LR_QUEUES[get_core() as usize][queue_pos] = lr_val; //TODO
+        LR_QUEUEPOSES[get_core() as usize] += 1;
+        }
+    }
+    
+    pub fn cpu_lr_queue_pop(&mut self) -> u32
+    {
+        unsafe
+        {
+        if (LR_QUEUEPOSES[get_core() as usize] <= 0)
+        {
+            println!("(core {}) !! BAD LR POP!", get_core());
+            return 0;
+        }
+
+        LR_QUEUEPOSES[get_core() as usize] -= 1;
+        let queue_pos = LR_QUEUEPOSES[get_core() as usize] as usize;
+        return CPU_LR_QUEUES[get_core() as usize][queue_pos];
+        }
+    }
+    
+    pub fn find_lr_slot(&mut self) -> u8
+    {
+        unsafe
+        {
+        // find an open slot
+        let virq_status = self.gich.gich_elsr0.r32();
+        for i in 0..32 // TODO read this max val
+        {
+            if ((virq_status & bit!(i)) != 0)
+            {
+                return i as u8;
+            }
+        }
+
+        return LR_INVALID_SLOT;
+        }
+    }
+    
+    pub fn process_queue(&mut self)
+    {
+        unsafe
+        {
+        // clear EOIs
+        let mut virq_status = self.gich.gich_eisr0.r32();
+        
+        for i in 0..4
+        {
+            if ((virq_status & bit!(i)) != 0)
+            {
+                //let hwint_id = (self.gich.gich_lr.idx32(i).r32() & LR_IRQ_MASK);
+                //println!("Cleared {:x}", hwint_id);
+                self.gich.gich_lr.idx32(i).w32(0);
+            }
+        }
+
+        let mut lr_slot = self.find_lr_slot();
+
+        while (LR_QUEUEPOSES[get_core() as usize] != 0 && lr_slot != LR_INVALID_SLOT)
+        {
+            let lr_val = self.cpu_lr_queue_pop();
+
+            // make sure we're not sending a request that is already pending
+            for i in 0..4
+            {
+                let lr_iter_val = self.gich.gich_lr.idx32(i).r32();
+                let lr_state = (lr_iter_val >> 28) & 3;
+                let lr_vid = (lr_iter_val & 0x3FF) as u16;
+                let lr_cpu = (lr_iter_val >> 10) & 3;
+                let lr_prio = (lr_iter_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
+
+                let lrval_prio = (lr_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
+                let lrval_cpu = (lr_val >> 10) & 3;
+                let int_id = (lr_val & 0x3FF) as u16;
+                if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == lrval_cpu)
+                {
+                    //lr_slot = LR_INVALID_SLOT;
+                    //self.cpu_lr_queue_push(lr_val);
+                    //break;
+                }
+                else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id)
+                {
+                    //lr_slot = LR_INVALID_SLOT;
+                    //self.cpu_lr_queue_push(lr_val);
+                    //break;
+                }
+
+                if (lr_vid == int_id && (lr_state == LR_STS_PENDING))
+                {
+                    lr_slot = LR_INVALID_SLOT; // don't queue another interrupt if there's one pending
+                    break;
+                }
+            }
+
+            if (lr_slot >= 4) { continue; }
+            self.gich.gich_lr.idx32(lr_slot as u32).w32(lr_val | ((lr_slot as u32) << LR_PRIO_SHIFT));
+            //println!("(core {}) using queue! pos {:x}", get_core(), LR_QUEUEPOSES[get_core() as usize]);
+
+            lr_slot = self.find_lr_slot();
+        }
+
+        let mut taken_slots: u8 = 0;
+        virq_status = self.gich.gich_eisr0.r32();
+        for i in 0..4
+        {
+            if ((virq_status & bit!(i)) != 0) {
+                taken_slots += 1;
+            }
+        }
+
+        // didn't deplete the queue and we still have entries,
+        // IRQ on no pending to make sure the queue gets handled
+        if (LR_QUEUEPOSES[get_core() as usize] != 0 || lr_slot == LR_INVALID_SLOT)
+        {
+            if (taken_slots >= 2) {
+                self.gich.gich_hcr |= GICH_INT_U;
+            }
+            else {
+                self.gich.gich_hcr |= GICH_INT_NP;
+            }
+
+        }
+        }
+    }
+    
+    pub fn do_maintenance(&mut self)
+    {
+        if (self.gich.gich_misr.bits_set(GICH_INT_NP))
+        {
+            self.gich.gich_hcr &= !GICH_INT_NP;
+            //println!("a {:x} {:08x} {:08x}", GICH_EISR0, GICH_LR[0], GICH_LR[1]);
+            //GICH_HCR |= GICH_INT_U;
+        }
+        else if (self.gich.gich_misr.bits_set(GICH_INT_U))
+        {
+            //println!("b {:x} {:08x} {:08x}", GICH_EISR0, GICH_LR[0], GICH_LR[1]);
+
+            self.gich.gich_hcr &= !GICH_INT_U;
+        }
+        else if (self.gich.gich_misr.bits_set(GICH_INT_EOI)) // EOI
+        {
+
+        }
+
+        self.process_queue();
+    }
+    
+    pub fn send_interrupt(&mut self, int_id: u16, vcpu: u8, prio: u8)
+    {
+        let mut lr_slot = self.find_lr_slot();
+        
+        //println!("(core {}) Sending int_id {} to vcpu {}, prio {}", get_core(), int_id, vcpu, prio);
+
+        let mut lr_val = 0;
+        if (!tegra_irq_is_sgi(int_id)) // hwint
+        {
+            lr_val |= LR_HWINT;
+            lr_val |= (LR_STS_PENDING << LR_STS_SHIFT);
+            lr_val |= ((int_id as u32) << LR_SHIFT_PIRQ); // physical IRQ id, sent to the distributer on vEOIR
+            lr_val |= ((int_id as u32) << LR_SHIFT_VIRQ); // virtual IRQ id, sent to the vCPU
+        }
+        else
+        {
+            lr_val |= (LR_STS_PENDING << LR_STS_SHIFT);
+            lr_val |= ((vcpu as u32) << LR_SHIFT_VCPU);
+            lr_val |= ((int_id as u32) << LR_SHIFT_VIRQ);
+        }
+
+        // make sure we're not sending a request that is already pending
+        for i in 0..4
+        {
+            let lr_iter_val = self.gich.gich_lr.idx32(i).r32();
+            let lr_state = (lr_iter_val >> 28) & 3;
+            let lr_vid = (lr_iter_val & 0x3FF) as u16;
+            let lr_cpu = ((lr_iter_val >> 10) & 3) as u8;
+            let lr_prio = (lr_iter_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
+
+
+            let lrval_prio = (lr_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
+            if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == vcpu)
+            {
+                lr_slot = LR_INVALID_SLOT;
+            }
+            else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id)
+            {
+                lr_slot = LR_INVALID_SLOT;
+            }
+            else if (lr_vid == int_id && (lr_state == LR_STS_PENDING))
+            {
+                return; // don't queue another interrupt if there's one pending
+            }
+        }
+
+        self.cpu_lr_queue_push(lr_val);
+    }
+    
+    pub fn get_gich_misr(&mut self) -> u32
+    {
+        self.gich.gich_misr.r32()
     }
 }

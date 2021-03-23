@@ -38,7 +38,7 @@ pub const IRQ_PPI_START: u16 = (16);
 pub const IRQ_SPI_START: u16 = (32);
 
 // List register bits
-pub const LR_INVALID_SLOT: u32 = (0xFF);
+pub const LR_INVALID_SLOT: u8 = (0xFF);
 pub const LR_HWINT:        u32 = (bit!(31));
 pub const LR_STS_SHIFT:    u32 = (28);
 pub const LR_PRIO_SHIFT:   u32 = (23);
@@ -55,6 +55,8 @@ pub const GICH_INT_U:   u32 = (bit!(1)); // underflow
 pub const GICH_INT_EOI: u32 = (bit!(0)); // end of interrupt IRQ
 
 static mut IRQ_HEARTBEAT_DOWNSCALE: [u32; 8] = [0; 8];
+static mut LOCKUP: [u32; 4] = [0; 4];
+static mut LAST_LOCKUP: [u32; 4] = [0; 4];
 
 pub fn tegra_irq_is_sgi(irqnum: u16) -> bool
 {
@@ -99,14 +101,15 @@ pub fn virq_handle() -> u64
     let start_ticks = vsysreg_getticks();
     let mut end_ticks = start_ticks;
 
+    let hppir = gic.gicc.gicc_hppir.r32();
     let rpr = gic.get_rpr();
     let vrpr = gic.get_vrpr();
     let vcpu = gic.get_int_vcpu();
     let int_id = gic.get_int_id();
 
     let iar = gic.get_iar();
-    let iar_vcpu = gic.get_iar_vcpu();
-    let iar_int_id = gic.get_iar_int_id();
+    let iar_vcpu = ((iar >> 10) & 0x7) as u8;
+    let iar_int_id = (iar & 0x3FF) as u16;
 
     gic.enable_interrupt(IRQ_EL2_GIC_MAINTENANCE, get_core());
     gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
@@ -117,7 +120,7 @@ pub fn virq_handle() -> u64
         last_core_ret = get_elr_el2();
         last_core_name = vsvc_get_curpid_name();
     }*/
-    //    printf("(core %u) a\n\r", get_core());
+    //    printf("(core {}) a\n\r", get_core());
 
     gic.enable_interrupt(IRQ_T210_USB, 0);
     tegra_irq_en(20);
@@ -125,14 +128,14 @@ pub fn virq_handle() -> u64
     gic.set_gich_vmcr();
 
     //TODO
-    /*if (int_id == 0x1e)
+    if (int_id == 0x1e)
     {
-        lockup[get_core()]++;
-    }*/
+        unsafe { LOCKUP[get_core() as usize] += 1; }
+    }
 
     if (int_id == 26) // timer
     {
-        //TODO better place this
+        //TODO better place this?
         if (get_core() == 0) {
             task_advance();
         }
@@ -151,6 +154,22 @@ pub fn virq_handle() -> u64
         {
             println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
             IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] = 0;
+            
+            if (get_core() == 3 && LOCKUP[get_core() as usize] == LAST_LOCKUP[get_core() as usize])
+            {
+                asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) tmp);
+                println!("lockup {:x}", tmp);
+                /*tmp = 100;
+                asm volatile ("msr CNTP_TVAL_EL0, %0" : "=r" (tmp));
+                tmp = 0x1;
+                asm volatile ("msr CNTP_CTL_EL0, %0" : "=r" (tmp));
+                gic_enable_interrupt(0x1e, get_core());
+                GICC_EOIR = 0x1e;
+                GICC_DIR = 0x1e;
+                GICH_APR &= ~BIT(1);*/
+
+            }
+            LAST_LOCKUP[get_core() as usize] = LOCKUP[get_core() as usize];
         }
         }
         
@@ -164,29 +183,16 @@ pub fn virq_handle() -> u64
     else if (int_id == IRQ_EL2_GIC_MAINTENANCE)
     {
         //TODO
-        //printf("(core %u) maintenance misr %08x hcr %08x vmcr %08x eisr0 %08x eisr1 %08x elsr0 %08x elsr1 %08x gicv_ctlr %08x gicc_ctrl %08x\n\r", get_core(), GICH_MISR, GICH_HCR, GICH_VMCR, GICH_EISR0, GICH_EISR1, GICH_ELSR0, GICH_ELSR1, GICV_CTLR, GICC_CTLR);
-        /*if (GICH_MISR & GICH_INT_NP)
-        {
-            GICH_HCR &= ~GICH_INT_NP;
-            //printf("a %x %08x %08x\n\r", GICH_EISR0, GICH_LR[0], GICH_LR[1]);
-            //GICH_HCR |= GICH_INT_U;
-        }
-        else if (GICH_MISR & GICH_INT_U)
-        {
-            //printf("b %x %08x %08x\n\r", GICH_EISR0, GICH_LR[0], GICH_LR[1]);
-
-            GICH_HCR &= ~GICH_INT_U;
-        }
-        else if (GICH_MISR & GICH_INT_EOI) // EOI
-        {
-
-        }
-
-        process_queue();
-
-        GICC_EOIR = iar;
-        GICC_DIR = iar;
-        goto _done;*/
+        println!("(core {}) maintenance misr {:08x} hcr {:08x} vmcr {:08x} eisr0 {:08x} eisr1 {:08x} elsr0 {:08x} elsr1 {:08x} gicv_ctlr {:08x} gicc_ctrl {:08x}", get_core(), gic.get_gich_misr(), gic.gich.gich_hcr.r32(), gic.gich.gich_vmcr.r32(), gic.gich.gich_eisr0.r32(), gic.gich.gich_eisr1.r32(), gic.gich.gich_elsr0.r32(), gic.gich.gich_elsr1.r32(), gic.gicv.gicv_ctlr.r32(), gic.gicc.gicc_ctlr.r32());
+        
+        gic.do_maintenance();
+        
+        gic.set_eoir(iar);
+        gic.set_dir(iar);
+        
+        end_ticks = vsysreg_getticks();
+        vsysreg_addoffset(end_ticks - start_ticks);
+        return get_elr_el2();
     }
     else if (int_id == IRQ_T210_USB)
     {
@@ -201,28 +207,28 @@ pub fn virq_handle() -> u64
         gic.set_eoir(iar);
         gic.set_dir(iar);
         
-        //TODO
         end_ticks = vsysreg_getticks();
         vsysreg_addoffset(end_ticks - start_ticks);
         return get_elr_el2();
     }
     else if (iar_int_id != 0x3FF)
     {
-        //TODO
-        //send_interrupt(iar_int_id, iar_vcpu, rpr);
-        //process_queue();
+        gic.send_interrupt(iar_int_id, iar_vcpu, rpr);
+        gic.process_queue();
     }
 
-    /*if (show_irqs) {
-        printf("IRQ core %u (misr %x rpr %x id %x, vcpu %u, IAR %04x->%04x LR[0] %08x ELSR0 %08x hppir %04x->%04x, vrpr %02x->%02x) ret %016llx\n\r",
+    let show_irqs = false;
+    if (show_irqs) 
+    {
+        println!("IRQ core {} (misr {:x} rpr {:x} id {:x}, vcpu {}, IAR {:04x}->{:04x} LR[0] {:08x} ELSR0 {:08x} hppir {:04x}->{:04x}, vrpr {:02x}->{:02x}) ret {:016x}",
                get_core(),
-               GICH_MISR, rpr, int_id, vcpu,
-               iar, GICV_HPPIR,
-               GICH_LR[0], GICH_ELSR0,
-               hppir, GICC_HPPIR,
-               vrpr, GICV_RPR,
+               gic.get_gich_misr(), rpr, int_id, vcpu,
+               iar, gic.gicv.gicv_hppir.r32(),
+               gic.gich.gich_lr.r32(), gic.gich.gich_elsr0.r32(),
+               hppir, gic.gicc.gicc_hppir.r32(),
+               vrpr, gic.gicv.gicv_rpr.r32(),
                get_elr_el2());
-    }*/
+    }
 
     // TODO was this correct...?
     if (iar != IRQ_INVALID as u32)
@@ -243,7 +249,7 @@ pub fn virq_handle() -> u64
     }
 
     //if (get_core() == 3)
-     //   printf("(core %u) b\n\r", get_core());
+     //   printf("(core {}) b\n\r", get_core());
     //TODO
     end_ticks = vsysreg_getticks();
     vsysreg_addoffset(end_ticks - start_ticks);

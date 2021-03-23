@@ -133,7 +133,7 @@ pub fn vttbr_new_lv3_pagetable(start_addr: u64) -> u64
                      /*|| (target_addr >= 0x700d0000 && target_addr < 0x700da000)*/
                      /*|| (target_addr >= 0x70003000 && target_addr < 0x70004000) // pinmux
                      || (target_addr >= 0x6000d000 && target_addr < 0x6000E000)*/ // gpio 
-                     || (target_addr >= 0x700b0000 && target_addr < 0x700c0000)
+                     /*|| (target_addr >= 0x700b0000 && target_addr < 0x700c0000)*/  // sdmmc
                      ) {
                 poke64(page_ent+arr_offs, 0);
             }
@@ -198,14 +198,14 @@ pub fn vttbr_construct()
         println!("Begin construct VTTBR lv1");
         println!("lv1 {:016x}", VTTBR_LV1);
         
-        let entries = 8;
+        let entries = 32;
         for i in 0..entries
         {
             if (i <= 8) {
                 poke64(VTTBR_LV1 + i*8, vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE));//(i * LV1_RANGE_SIZE) | VTTBR_BLOCK_OR_VAL;
             }
             else if (i > 8) {
-                poke64(VTTBR_LV1 + i*8, 0);//vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE);
+                poke64(VTTBR_LV1 + i*8, 0); // vttbr_new_lv2_pagetable(i * LV1_RANGE_SIZE)
             }
         }
         
