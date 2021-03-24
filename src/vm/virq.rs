@@ -16,6 +16,7 @@ use crate::logger::*;
 use crate::vm::vsysreg::*;
 use crate::vm::vsvc::*;
 use crate::vm::funcs::*;
+use crate::io::timer::*;
 
 pub const IRQNUM_T210_USB: u16 = 20;
 

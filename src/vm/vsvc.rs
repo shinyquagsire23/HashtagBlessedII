@@ -38,10 +38,10 @@ pub const fn vsvc_get_curpid_name() -> &'static str
 pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
 {
     let svc_num = iss & 0xFF;
-    println!("(core {}) SVC 0x{:02x}, pid {:02x}", get_core(), svc_num, vsvc_get_curpid());
+    //println!("(core {}) SVC 0x{:02x}, pid {:02x}", get_core(), svc_num, vsvc_get_curpid());
     if (get_core() == 3 && vsvc_get_curpid() == 1) {
-        enable_single_step();
-        ctx[38] |= (1<<21);
+        //enable_single_step();
+        //ctx[38] |= (1<<21);
     }
     return get_elr_el2();
 }
@@ -49,5 +49,9 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
 pub fn vsvc_post_handle(iss: u32, ctx: &mut [u64]) -> u64
 {
     //println!("SVC post");
+    if (get_core() == 3 && vsvc_get_curpid() == 1) {
+        //enable_single_step();
+        //ctx[38] |= (1<<21);
+    }
     return get_elr_el2();
 }

@@ -191,7 +191,7 @@ pub fn vmmio_handle_lowerel_dabt(iss: u32, ctx: &mut [u64]) -> u64
         ctx[srt as usize] = v_regrw.val;
     }
 
-    //if (v_regrw.debug_print)
+    if (v_regrw.debug_print)
     {
         iss_string = get_dabt_iss_str(iss, ctx);
 

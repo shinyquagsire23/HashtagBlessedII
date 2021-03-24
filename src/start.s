@@ -431,6 +431,16 @@ irq__do_except:
     beq t210_reset
 
     msr elr_el2, x0
+    
+    sub x1, sp, #0x10
+	sub x0, sp, #0x8000
+	ldr x2, =0x42424242
+	ldr x3, =0x43434343
+_stack_clear_loop:
+    stp x2, x3, [x0, #0x0]
+    add x0, x0, #0x10
+    cmp x0, x1
+    ble _stack_clear_loop
 
     //mrs x0, hcr_el2
     //orr x0, x0, #(1<<7)

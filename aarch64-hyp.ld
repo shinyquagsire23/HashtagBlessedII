@@ -103,7 +103,7 @@ SECTIONS
         _stack = .; *(.stack)
         . = ALIGN(0x100);
         __stack_start = .;
-        . += 0x80000;
+        . += 0x100000;
         __stack_end = .;
         LD_STACK_PTR = .;
         

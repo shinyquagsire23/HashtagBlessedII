@@ -72,7 +72,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     }
     else if (smc_cmd == SMC0_GENAESKEK || smc_cmd == SMC0_COMPUTEAES || smc_cmd == SMC0_COMPUTECMAC || smc_cmd == SMC0_GETCONFIG/* || smc_cmd == SMC_GENRANDOMBYTES || smc_cmd == SMC_GETCONFIG*/)
     {
-        //silence_print = true;
+        silence_print = true;
     }
 
     if (!silence_print)

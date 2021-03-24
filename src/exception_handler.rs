@@ -39,6 +39,8 @@ static mut RET_ADDR_LAST_PRINT: u64 = 0;
 static mut IN_LOCK: bool = false;
 static mut BKPT_ADDR: u64 = 0;
 static mut BKPT_OLD: u32 = 0;
+static mut FORCE_PRINT: bool = false;
+static mut BKPT_CNT: u32 = 0;
 
 pub const fn get_ifsc_dfsc_str<'a>(iss: &'a u32) -> &'a str
 {
@@ -477,9 +479,10 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         }
         else if (hvc_num == 5)
         {
-            println!("BKPT!");
+            
             unsafe
             {
+            println!("BKPT! {}", BKPT_CNT);
             let trans_bkpt = translate_el1_stage12(BKPT_ADDR);
             poke32(trans_bkpt, BKPT_OLD);
             
@@ -492,6 +495,10 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             
             IN_LOCK = false;
             BKPT_OLD = 0;
+            BKPT_CNT += 1;
+            if (BKPT_CNT >= 70) {
+                FORCE_PRINT = true;
+            }
             }
         }
         else if (ec == EC_DABT_LOWER_EL || ec == EC_IABT_LOWER_EL || ec == EC_PC_ALIGN)
@@ -573,7 +580,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         ret_addr = elr_el2;
         unsafe
         {
-        if (RET_ADDR_LAST+4 != ret_addr && ret_addr != RET_ADDR_LAST_PRINT) {
+        if ((RET_ADDR_LAST+4 != ret_addr && ret_addr != RET_ADDR_LAST_PRINT) || FORCE_PRINT) {
             println!("{:016x} {:016x} {:08x} {:08x}", ret_addr, ctx[31], ctx[38] & bit!(21), esr_el2);
             RET_ADDR_LAST_PRINT = ret_addr;
             

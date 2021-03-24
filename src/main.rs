@@ -79,9 +79,9 @@ const KERN_DATA: &[u8] = include_bytes!("../data/0_kernel_80060000.bin");
 static ALLOCATOR: HtbHeap = HtbHeap::empty();
 
 #[repr(align(0x1000))]
-struct PageAlignedHeapAlloc([u8; 0x100000]);
+struct PageAlignedHeapAlloc([u8; 0x800000]);
 
-static HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x100000]);
+static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x800000]);
 
 #[no_mangle]
 pub extern "C" fn main_warm() 

@@ -145,7 +145,7 @@ pub fn memset32(dst: u64, val: u32, len: usize) {
 #[derive(Copy, Clone)]
 pub struct MMIOReg
 {
-    addr: u32
+    pub addr: u32
     //mut_reg: *mut u32
 }
 
