@@ -17,6 +17,7 @@ use core::mem;
 use alloc::vec::Vec;
 use wchar::{wch, wch_c};
 use crate::usbd::cdc::*;
+use crate::usbd::debug::*;
 
 pub const USB2D_BASE: u32 = (0x7D000000);
 
@@ -600,7 +601,7 @@ const deviceDesc: UsbDtDevice = UsbDtDevice
     bMaxPacketSize: 64,
     idVendor: 0x057e, // Nintendo Co. Ltd
     idProduct: 0x2000, // Nintendo Switch
-    bcdDevice: 0x0100,
+    bcdDevice: 0x0101,
     iManufacturer: 1,
     iProduct: 2,
     iSerialNumber: 0,
@@ -614,9 +615,9 @@ const strDescManufacturer: UsbDtString = UsbDtString {
 };
 
 const strDescProduct: UsbDtString = UsbDtString {
-    bLength: 4+2,
-    bDescriptorType: 3, //USB_DT_STRING as u8,
-    data: *wch!("NX\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0")
+    bLength: 12+2,
+    bDescriptorType: 7, //USB_DT_STRING as u8,
+    data: *wch!("NX-HTB\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0")
 };
 
 const strDescSerial: UsbDtString = UsbDtString {
@@ -662,7 +663,9 @@ pub struct UsbdEndpoint
 {
     pub isAssigned: bool,
     pub isEnabled: bool,
-    pub handler: Option<fn(&mut UsbDevice, u8)>,
+    pub complete_handler: Option<fn(&mut UsbDevice, u8)>,
+    pub idle_handler: Option<fn(&mut UsbDevice, u8)>,
+    pub fail_handler: Option<fn(&mut UsbDevice, u8)>,
     pub pDataTransDesc: u64,
     //UsbTransDesc* pDataTransDesc;
     pub epConfigured: bool,
@@ -712,7 +715,9 @@ pub enum UsbdError
 const usbdEndpoint_init: UsbdEndpoint = UsbdEndpoint {
     isAssigned: false,
     isEnabled: false,
-    handler: None,
+    complete_handler: None,
+    idle_handler: None,
+    fail_handler: None,
     pDataTransDesc: 0,
     
     epConfigured: false,
@@ -830,7 +835,9 @@ impl UsbDevice
             let i_u8: u8 = (i & 0xFF) as u8;
             self.endpoints[i].isAssigned = false;
             self.endpoints[i].isEnabled = false;
-            self.endpoints[i].handler = None;
+            self.endpoints[i].complete_handler = None;
+            self.endpoints[i].idle_handler = None;
+            self.endpoints[i].fail_handler = None;
             
             self.endpoints[i].epNum = i_u8;
             self.endpoints[i].epAddress = USB2D_EPNUM_TO_EPADDR!(i_u8);
@@ -1978,10 +1985,37 @@ impl UsbDevice
                 break;
             }
             
-            if (self.endpoints[i].isEnabled 
-                && self.ep_status(i as u8) == UsbEpStatus::TxfrComplete)
+            if (!self.endpoints[i].isEnabled) { i += 1; continue; }
+            
+            let stat = self.ep_status(i as u8) as u8;
+            println_uarta!("{} {} {} completed", i, self.endpoints[i].isEnabled, stat);
+            
+            if (self.ep_status(i as u8) == UsbEpStatus::TxfrComplete)
             {
-                match (self.endpoints[i].handler)
+                match (self.endpoints[i].complete_handler)
+                {
+                    Some(p) => {
+                        p(self, i as u8);
+                        self.ep_idle(i as u8);
+                    },
+                    None => {}
+                }
+            }
+            
+            if (self.ep_status(i as u8) == UsbEpStatus::TxfrIdle)
+            {
+                match (self.endpoints[i].idle_handler)
+                {
+                    Some(p) => {
+                        p(self, i as u8);
+                    },
+                    None => {}
+                }
+            }
+            
+            if (self.ep_status(i as u8) == UsbEpStatus::TxfrFail)
+            {
+                match (self.endpoints[i].fail_handler)
                 {
                     Some(p) => {
                         p(self, i as u8);
@@ -1996,14 +2030,34 @@ impl UsbDevice
         return UsbdError::Success;
     }
     
-    pub fn register_handler(&mut self, epNum: u8, handler: fn(&mut UsbDevice, u8))
+    pub fn register_complete_handler(&mut self, epNum: u8, handler: fn(&mut UsbDevice, u8))
     {
-        self.endpoints[epNum as usize].handler = Some(handler);
+        self.endpoints[epNum as usize].complete_handler = Some(handler);
     }
     
-    pub fn remove_handler(&mut self, epNum: u8)
+    pub fn remove_complete_handler(&mut self, epNum: u8)
     {
-        self.endpoints[epNum as usize].handler = None;
+        self.endpoints[epNum as usize].complete_handler = None;
+    }
+    
+    pub fn register_idle_handler(&mut self, epNum: u8, handler: fn(&mut UsbDevice, u8))
+    {
+        self.endpoints[epNum as usize].idle_handler = Some(handler);
+    }
+    
+    pub fn remove_idle_handler(&mut self, epNum: u8)
+    {
+        self.endpoints[epNum as usize].idle_handler = None;
+    }
+    
+    pub fn register_fail_handler(&mut self, epNum: u8, handler: fn(&mut UsbDevice, u8))
+    {
+        self.endpoints[epNum as usize].fail_handler = Some(handler);
+    }
+    
+    pub fn remove_fail_handler(&mut self, epNum: u8)
+    {
+        self.endpoints[epNum as usize].fail_handler = None;
     }
     
     pub fn register_setup_hook(&mut self, handler: fn(&mut UsbDevice, UsbSetupPacket)->bool) -> usize
@@ -2101,7 +2155,7 @@ pub fn irq_usb()
     // A USB reset was requested
     if ((usbSts & USBSTS_USBRST) != 0)
     {
-        println!("usbd: reset requested");
+        println_uarta!("usbd: reset requested");
         usbd.halt_activity();
         
         // Run through reset handlers
@@ -2109,38 +2163,43 @@ pub fn irq_usb()
         {
             usbd.reset_handlers[i](usbd);
         }
+        
+        // Initialize USB context
+        usbd.update_port_speed();
+        
+        result = usbd.init_controller();
+        if (result != UsbdError::Success) {
+            return;
+        }
+        println_uarta!("reset done?");
     }
     
     // Cable was reinserted
     if ((usbSts & USBSTS_USBPORT) != 0)
     {
-        // Initialize USB context
-        usbd.update_port_speed();
-        
-        println!("usbd: cable reinserted");
-
-        result = usbd.init_controller();
-        if (result != UsbdError::Success) {
-            return;
-        }
+        println_uarta!("usbd: cable reinserted");
     }
     
     // Check for incoming setup packets and handle them
     result = usbd.handle_control_req();
     if ((result != UsbdError::Success) && !usbd.is_enumeration_done()) {
+        println_uarta!("usbd: done int err ctrl");
         return;
     }
     
     // Don't talk to endpoints until we're enumerated
     if (!usbd.is_enumeration_done()) {
+        println_uarta!("usbd: done int no enum");
         return;
     }
     
     // Call endpoint handlers as appropriate
     result = usbd.handle_endpoints();
     if (result != UsbdError::Success) {
+        println_uarta!("usbd: done int err endpoint");
         return;
     }
+    println_uarta!("usbd: done int");
     
     return;
 }
@@ -2152,26 +2211,14 @@ pub fn usbd_recover() -> UsbdError
     
     println!("usbd: Begin init");
     usbd.init();
-    cdc_init();
+    debug_init();
+    //cdc_init();
     
     println!("usbd: Begin init context");
     usbd.init_context();
     usbd.enable_clocks();
     usbd.init_controller();
     println!("usbd: USB controller initialized...");
-    
-    let debug_interface_idx: u8 = usbd.create_interface(2);
-    let debug_interface: _ = usbd.get_interface(debug_interface_idx);
-    debug_interface.class = 0xFF;
-    debug_interface.subclass = 0xFF;
-    debug_interface.protocol = 0xFF;
-    
-    let ep_bulk0 = debug_interface.endpointStart + 0;
-    let ep_bulk1 = debug_interface.endpointStart + 1;
-    usbd.get_ep(ep_bulk0).ep_construct(512, USB_EPATTR_TTYPE_BULK, 0);
-    usbd.get_ep(ep_bulk1).ep_construct(512, USB_EPATTR_TTYPE_BULK, 0);
-    
-    usbd.ep_idle(UsbEpNum::BULK_OUT as u8);
     
     usbd.interrupt_en();
 

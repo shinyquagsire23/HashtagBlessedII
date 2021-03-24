@@ -6,3 +6,4 @@
 
 pub mod usbd;
 pub mod cdc;
+pub mod debug;

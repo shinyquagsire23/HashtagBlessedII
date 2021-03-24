@@ -121,14 +121,14 @@ pub fn log_usb(data: &str)
 {
     let usbd = get_usbd();
 
-    cdc_send(usbd, data.as_bytes(), data.len());
+    //cdc_send(usbd, data.as_bytes(), data.len());
 }
 
 pub fn log_usb_raw(data: &[u8])
 {
     let usbd = get_usbd();
 
-    cdc_send(usbd, data, data.len());
+    //cdc_send(usbd, data, data.len());
 }
 
 pub fn log_process()

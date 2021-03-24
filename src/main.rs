@@ -59,6 +59,7 @@ use vm::vmmu::*;
 use vm::funcs::*;
 use usbd::usbd::*;
 use usbd::cdc::*;
+use usbd::debug::*;
 use logger::*;
 use alloc::vec::Vec;
 use hos::kernel::KERNEL_START;
@@ -157,13 +158,13 @@ pub extern "C" fn main_cold()
     println!("");
     println!("Waddup from EL2!");
     
-    time_out = 30000;
-    while (!cdc_active() && time_out > 0)
+    while (!debug_active())
     {
         timer_wait(1000);
-        time_out -= 1;
     }
-    cdc_enable();
+    debug_enable();
+    
+    loop{timer_wait(1000);}
     
     println!("USB connection recovered!");
 

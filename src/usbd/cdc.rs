@@ -429,8 +429,8 @@ pub fn cdc_init()
     usbd.get_ep(cdc.if1_epBulkIn).ep_construct(CDC_BULK_PKT_SIZE, USB_EPATTR_TTYPE_BULK, 0);
     
     // Register all of our handlers
-    usbd.register_handler(cdc.if1_epBulkOut, cdc_if1_recvcomplete);
-    usbd.register_handler(cdc.if1_epBulkIn, cdc_if1_sendcomplete);
+    usbd.register_complete_handler(cdc.if1_epBulkOut, cdc_if1_recvcomplete);
+    usbd.register_complete_handler(cdc.if1_epBulkIn, cdc_if1_sendcomplete);
     cdc.setup_hook_idx = usbd.register_setup_hook(cdc_setup_hook);
 
     //mutexInit(&cdc_send_mutex);
@@ -445,6 +445,6 @@ pub fn cdc_fini()
     let cdc = get_cdc();
     
     usbd.remove_setup_hook(cdc.setup_hook_idx);
-    usbd.remove_handler(cdc.if1_epBulkOut);
-    usbd.remove_handler(cdc.if1_epBulkIn);
+    usbd.remove_complete_handler(cdc.if1_epBulkOut);
+    usbd.remove_complete_handler(cdc.if1_epBulkIn);
 }
