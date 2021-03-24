@@ -172,8 +172,7 @@ pub fn print_context(ctx: &[u64], is_dabt: bool)
     asm!("mrs {0},MPIDR_EL1", out(reg) mpidr);
     asm!("mrs {0}, CONTEXTIDR_EL1", out(reg) contextidr);
     println!("midr       {:016x} mpidr {:016x} elr_el1 {:016x}", midr, mpidr, get_elr_el1());
-    let pid: u8 = (contextidr & 0xFF) as u8;
-    println!("contextidr {:016x} ({})", contextidr, vsvc_get_pid_name(&pid));
+    println!("contextidr {:016x} ({})", contextidr, vsvc_get_curpid_name());
     }
     
     println!("----");

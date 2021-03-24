@@ -77,8 +77,8 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
 
     if (!silence_print)
     {
-        println!("(core {}) SMC #{} Smc{} (X0 = {:016x}, X1 = {:016x}, X2 = {:016x}, X3 = {:016x})", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0], ctx[1], ctx[2], ctx[3]);
-        println!("          (X4 = {:016x}, X5 = {:016x}, X6 = {:016x}, X7 = {:016x})", ctx[4], ctx[5], ctx[6], ctx[7]);
+        //println!("(core {}) SMC #{} Smc{} (X0 = {:016x}, X1 = {:016x}, X2 = {:016x}, X3 = {:016x})", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0], ctx[1], ctx[2], ctx[3]);
+        //println!("          (X4 = {:016x}, X5 = {:016x}, X6 = {:016x}, X7 = {:016x})", ctx[4], ctx[5], ctx[6], ctx[7]);
     }
 
 /*    if (smc_cmd == SMC0_GETCONFIG && ctx[1] == 65000)
@@ -144,8 +144,8 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     
     if (!silence_print)
     {
-        println!("(core {}) ret SMC #{} Smc{} (X0 = {:016x}, X1 = {:016x}, X2 = {:016x}, X3 = {:016x})", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0], ctx[1], ctx[2], ctx[3]);
-        println!("          (X4 = {:016x}, X5 = {:016x}, X6 = {:016x}, X7 = {:016x})", ctx[4], ctx[5], ctx[6], ctx[7]);
+        //println!("(core {}) ret SMC #{} Smc{} (X0 = {:016x}, X1 = {:016x}, X2 = {:016x}, X3 = {:016x})", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0], ctx[1], ctx[2], ctx[3]);
+        //println!("          (X4 = {:016x}, X5 = {:016x}, X6 = {:016x}, X7 = {:016x})", ctx[4], ctx[5], ctx[6], ctx[7]);
     }
 
     if (ctx[0] != 0)

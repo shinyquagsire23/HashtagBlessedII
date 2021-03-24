@@ -146,7 +146,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
         {
         let mut tmp: u64 = 0;
 
-        tmp = 0x80000;
+        tmp = 0x10000;
         asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
         tmp = 0x1;
         asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
@@ -188,7 +188,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     else if (int_id == IRQ_EL2_GIC_MAINTENANCE)
     {
         //TODO
-        println!("(core {}) maintenance misr {:08x} hcr {:08x} vmcr {:08x} eisr0 {:08x} eisr1 {:08x} elsr0 {:08x} elsr1 {:08x} gicv_ctlr {:08x} gicc_ctrl {:08x}", get_core(), gic.get_gich_misr(), gic.gich.gich_hcr.r32(), gic.gich.gich_vmcr.r32(), gic.gich.gich_eisr0.r32(), gic.gich.gich_eisr1.r32(), gic.gich.gich_elsr0.r32(), gic.gich.gich_elsr1.r32(), gic.gicv.gicv_ctlr.r32(), gic.gicc.gicc_ctlr.r32());
+        //println!("(core {}) maintenance misr {:08x} hcr {:08x} vmcr {:08x} eisr0 {:08x} eisr1 {:08x} elsr0 {:08x} elsr1 {:08x} gicv_ctlr {:08x} gicc_ctrl {:08x}", get_core(), gic.get_gich_misr(), gic.gich.gich_hcr.r32(), gic.gich.gich_vmcr.r32(), gic.gich.gich_eisr0.r32(), gic.gich.gich_eisr1.r32(), gic.gich.gich_elsr0.r32(), gic.gich.gich_elsr1.r32(), gic.gicv.gicv_ctlr.r32(), gic.gicc.gicc_ctlr.r32());
         
         gic.do_maintenance();
         
@@ -266,16 +266,26 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     return get_elr_el2();
 }
 
-pub fn critical_start()
+pub fn critical_start() -> u64
 {
-    //unsafe { asm!("msr daifset, #0xf"); }
-    let mut gic: GIC = GIC::new();
-    gic.disable_distribution();
+    let mut daif: u64 = 0;
+    unsafe {
+        asm!("mrs {0}, daif", out(reg) daif);
+        asm!("msr daifset, #0x2");
+    }
+    
+    return daif;
+    
+    //let mut gic: GIC = GIC::new();
+    //gic.disable_distribution();
 }
 
-pub fn critical_end()
+pub fn critical_end(lock: u64)
 {
-    //unsafe { asm!("msr daifclr, #0xf"); }
-    let mut gic: GIC = GIC::new();
-    gic.enable_distribution();
+    unsafe {
+        asm!("msr daif, {0}", in(reg) lock);
+    }
+    
+    //let mut gic: GIC = GIC::new();
+    //gic.enable_distribution();
 }

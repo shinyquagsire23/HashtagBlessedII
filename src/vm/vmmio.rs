@@ -195,15 +195,7 @@ pub fn vmmio_handle_lowerel_dabt(iss: u32, ctx: &mut [u64]) -> u64
     {
         iss_string = get_dabt_iss_str(iss, ctx);
 
-        unsafe
-        {
-        let mut contextidr: u64 = 0;
-        asm!("mrs {0}, CONTEXTIDR_EL1", out(reg) contextidr);
-        let pid: u8 = (contextidr & 0xFF) as u8;
-
-        //if (pid >= 0x50)
-        println!("core {}: DABT (lower EL, pid {:02x} {}) {}", get_core(), pid, vsvc_get_pid_name(&pid), iss_string);
-        }
+        println!("core {}: DABT (lower EL, pid {:02x} {}) {}", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name(), iss_string);
     }
     
     return get_elr_el2() + 4;

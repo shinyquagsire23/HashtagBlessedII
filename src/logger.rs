@@ -20,7 +20,7 @@ use crate::arm::ticks::*;
 use crate::util::*;
 use crate::arm::threading::*;
 
-static LOGGER_MUTEX: spin::Mutex<()> = spin::Mutex::new(());
+static LOGGER_MUTEX: [spin::Mutex<()>; 8] = [spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(())];
 
 static mut LOGGER_DATA: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
 static mut LOGGER_CMD: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
@@ -101,7 +101,10 @@ pub fn logger_unsafe_override()
 {
     unsafe
     {
-        LOGGER_MUTEX.force_unlock();
+        for i in 0..8
+        {
+            LOGGER_MUTEX[i].force_unlock();
+        }
     }
 }
 
@@ -137,30 +140,40 @@ pub fn log_process()
 {
     unsafe
     {
-        critical_start();
+        let irq_lock = critical_start();
         
         // Process data later if this gets called mid-log
         // TODO per-core mutex?
         // TODO timestamps?
-        let lock_try = LOGGER_MUTEX.try_lock();
-        if (!lock_try.is_some())
+        
+        let mut logger_data_copy: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
+        let mut logger_cmd_copy: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
+        
         {
-            critical_end();
-            return;
+            for core_iter in 0..8
+            {
+                let lock = LOGGER_MUTEX[core_iter].lock();
+                
+                let mut logger_data = LOGGER_DATA[core_iter].as_mut().unwrap();
+                let mut logger_cmd = LOGGER_CMD[core_iter].as_mut().unwrap();
+
+                logger_data_copy[core_iter] = Some(logger_data.split_off(0));
+                logger_cmd_copy[core_iter] = Some(logger_cmd.split_off(0));
+            }
         }
-        let lock = lock_try.unwrap();
         
         loop
         {
             for core_iter in 0..8
             {
-                let mut logger_data = LOGGER_DATA[core_iter].as_mut().unwrap();
+                let mut logger_data = logger_data_copy[core_iter].as_mut().unwrap();
                 
                 if (logger_data.is_empty())
                 {
                     continue;
                 }
 
+                
                 let data = logger_data.make_contiguous();
 
                 let mut next_line = data.len();
@@ -190,7 +203,7 @@ pub fn log_process()
             let mut is_done = true;
             for core_iter in 0..8
             {
-                let mut logger_data = LOGGER_DATA[core_iter].as_mut().unwrap();
+                let mut logger_data = logger_data_copy[core_iter].as_mut().unwrap();
                 
                 if (!logger_data.is_empty())
                 {
@@ -206,7 +219,7 @@ pub fn log_process()
         {
             for core_iter in 0..8
             {
-                let mut logger_data = LOGGER_CMD[core_iter].as_mut().unwrap();
+                let mut logger_data = logger_cmd_copy[core_iter].as_mut().unwrap();
                 
                 if (logger_data.is_empty())
                 {
@@ -221,7 +234,7 @@ pub fn log_process()
             let mut is_done = true;
             for core_iter in 0..8
             {
-                let mut logger_data = LOGGER_CMD[core_iter].as_mut().unwrap();
+                let mut logger_data = logger_cmd_copy[core_iter].as_mut().unwrap();
                 
                 if (!logger_data.is_empty())
                 {
@@ -232,7 +245,7 @@ pub fn log_process()
             if is_done { break; }
         }
         
-        critical_end();
+        critical_end(irq_lock);
     }
 }
 
@@ -245,9 +258,9 @@ pub fn log_raw(data: &[u8])
 {
     unsafe
     {
-        critical_start();
+        let irq_lock = critical_start();
         
-        let lock = LOGGER_MUTEX.lock();
+        let lock = LOGGER_MUTEX[get_core() as usize].lock();
 
         let mut logger_data = LOGGER_DATA[get_core() as usize].as_mut().unwrap();
         
@@ -256,7 +269,7 @@ pub fn log_raw(data: &[u8])
             logger_data.push_back(*byte);
         }
         
-        critical_end();
+        critical_end(irq_lock);
     }
 }
 
@@ -264,9 +277,9 @@ pub fn log_cmd(data: &[u8])
 {
     unsafe
     {
-        critical_start();
+        let irq_lock = critical_start();
         
-        let lock = LOGGER_MUTEX.lock();
+        let lock = LOGGER_MUTEX[get_core() as usize].lock();
 
         let mut logger_data = LOGGER_CMD[get_core() as usize].as_mut().unwrap();
         
@@ -275,7 +288,7 @@ pub fn log_cmd(data: &[u8])
             logger_data.push_back(*byte);
         }
         
-        critical_end();
+        critical_end(irq_lock);
     }
 }
 

@@ -16,6 +16,7 @@
 #![feature(default_alloc_error_handler)]
 #![feature(const_fn_fn_ptr_basics)]
 #![feature(const_mut_refs)]
+#![feature(const_btree_new)]
 
 #[macro_use]
 extern crate alloc;

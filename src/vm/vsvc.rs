@@ -6,11 +6,31 @@
 
 use crate::arm::exceptions::*;
 use crate::arm::threading::*;
+use crate::arm::mmu::*;
 use crate::vm::funcs::*;
+use crate::hos::svc::*;
+use alloc::collections::btree_map::BTreeMap;
+use alloc::string::String;
+use crate::util::*;
+use alloc::sync::Arc;
+
+static mut LAST_CREATED: [Option<String>; 8] = [None, None, None, None, None, None, None, None];
+static mut RUNNING_PROCESS_NAME: BTreeMap<u32, String> = BTreeMap::new();
 
 pub fn vsvc_init()
 {
-
+    // 8.0.1, TODO parse this from KIPs?
+    unsafe
+    {
+        RUNNING_PROCESS_NAME.insert(1, String::from("FS"));
+        RUNNING_PROCESS_NAME.insert(2, String::from("Loader"));
+        RUNNING_PROCESS_NAME.insert(3, String::from("NCM"));
+        RUNNING_PROCESS_NAME.insert(4, String::from("ProcessMana"));
+        RUNNING_PROCESS_NAME.insert(5, String::from("sm"));
+        RUNNING_PROCESS_NAME.insert(6, String::from("spl"));
+        RUNNING_PROCESS_NAME.insert(7, String::from("boot"));
+        RUNNING_PROCESS_NAME.insert(0xFF, String::from("idle core"));
+    }
 }
 
 pub fn vsvc_get_curpid() -> u32
@@ -25,23 +45,65 @@ pub fn vsvc_get_curpid() -> u32
     }
 }
 
-pub const fn vsvc_get_pid_name<'a>(pid: &'a u8) -> &'a str
+pub fn vsvc_get_pid_name(pid: u32) -> String
 {
-    return ""; //TODO
+    unsafe
+    {
+        match RUNNING_PROCESS_NAME.get(&pid) {
+           Some(name) => name.clone(),
+           None => String::from("unknown pid")
+        }
+    }
 }
 
-pub const fn vsvc_get_curpid_name() -> &'static str
+pub fn vsvc_get_curpid_name() -> String
 {
-    return ""; //TODO
+    let pid = (vsvc_get_curpid() & 0xFF) as u32;
+    return vsvc_get_pid_name(pid);
 }
 
 pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
 {
-    let svc_num = iss & 0xFF;
-    //println!("(core {}) SVC 0x{:02x}, pid {:02x}", get_core(), svc_num, vsvc_get_curpid());
-    if (get_core() == 3 && vsvc_get_curpid() == 1) {
-        //enable_single_step();
-        //ctx[38] |= (1<<21);
+    let svc = HorizonSvc::from_iss(iss);
+    let timeout_stretch = 1;
+    match svc {
+        HorizonSvc::WaitSynchronization => {
+            ctx[3] *= timeout_stretch; // timeout
+        },
+        HorizonSvc::WaitProcessWideKeyAtomic => {
+            ctx[3] *= timeout_stretch; // timeout
+        },
+        HorizonSvc::WaitForAddress => {
+            ctx[3] *= timeout_stretch; // timeout
+        },
+        HorizonSvc::ReplyAndReceive => {
+            ctx[4] *= timeout_stretch; // timeout
+        },
+        HorizonSvc::ReplyAndReceiveWithUserBuffer => {
+            ctx[6] *= timeout_stretch; // timeout
+        },
+        HorizonSvc::CreateProcess => {
+            let proc_name = str_from_null_terminated_utf8_u64ptr_unchecked(translate_el1_stage12(ctx[1]));
+
+            //println!("(core {}) svcCreateProcess -> {}", get_core(), proc_name);
+            unsafe
+            {
+                LAST_CREATED[get_core() as usize] = Some(String::from(proc_name));
+            }
+        },
+        HorizonSvc::QueryMemory => {
+            unsafe
+            {
+                if !RUNNING_PROCESS_NAME.contains_key(&vsvc_get_curpid())
+                {
+                    let name = &LAST_CREATED[get_core() as usize];
+                    if name.is_some() {
+                        RUNNING_PROCESS_NAME.insert(vsvc_get_curpid(), name.as_ref().unwrap().clone());
+                    }
+                }
+            }
+        },
+        _ => {}
     }
     return get_elr_el2();
 }
