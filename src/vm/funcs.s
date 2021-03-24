@@ -79,10 +79,51 @@ smc0_shim:
 drop_to_el1:
     msr     elr_el2, x0
     //msr     sp_el1, x1
-    mov     x2, #0x3c5     // EL1_SP1 | D | A | I | F
+    
+    msr daifset, #8 // don't debug current EL
+    
+    ldr     x2, =(0x3c5 | (1<<21))     // EL1_SP1 | D | A | I | F | SS
     msr     spsr_el2, x2
 
     eret
+
+.global _enable_single_step
+_enable_single_step:
+    ldr x3, =(0)
+    msr OSLAR_EL1, x3 // unlock
+    
+    ldr x3, =(1 << 8) // route debug exceptions to EL2
+    msr MDCR_EL2, x3
+    
+    mrs x2, spsr_el2
+    ldr     x3, =(1<<21)     // SS
+    orr x2, x2, x3
+    msr     spsr_el2, x2
+
+    msr daifset, #8 // don't debug current EL
+    ldr x3, =(1<<13 | 1) // single-step, kernel debug en
+    msr MDSCR_EL1, x3
+    isb
+    ret
+
+.global _disable_single_step
+_disable_single_step:
+    ldr x3, =(0)
+    msr OSLAR_EL1, x3 // unlock
+    
+    ldr x3, =(1 << 8) // route debug exceptions to EL2
+    msr MDCR_EL2, x3
+    
+    mrs x2, spsr_el2
+    ldr     x3, =(1<<21)     // SS
+    orr x2, x2, x3
+    msr     spsr_el2, x2
+
+    msr daifset, #8 // don't debug current EL
+    ldr x3, =(1<<13 | 0) // single-step, kernel debug en
+    msr MDSCR_EL1, x3
+    isb
+    ret
 
 .global vttbr_apply
 vttbr_apply:

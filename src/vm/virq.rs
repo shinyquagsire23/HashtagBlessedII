@@ -15,6 +15,7 @@ use crate::task::*;
 use crate::logger::*;
 use crate::vm::vsysreg::*;
 use crate::vm::vsvc::*;
+use crate::vm::funcs::*;
 
 pub const IRQNUM_T210_USB: u16 = 20;
 
@@ -158,7 +159,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
             if (get_core() == 3 && LOCKUP[get_core() as usize] == LAST_LOCKUP[get_core() as usize])
             {
                 asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) tmp);
-                println!("lockup {:x}", tmp);
+                println!("lockup {:x}", get_elr_el2());
                 /*tmp = 100;
                 asm volatile ("msr CNTP_TVAL_EL0, %0" : "=r" (tmp));
                 tmp = 0x1;
@@ -167,6 +168,8 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
                 GICC_EOIR = 0x1e;
                 GICC_DIR = 0x1e;
                 GICH_APR &= ~BIT(1);*/
+                
+                disable_single_step();
 
             }
             LAST_LOCKUP[get_core() as usize] = LOCKUP[get_core() as usize];

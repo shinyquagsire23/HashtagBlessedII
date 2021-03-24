@@ -6,6 +6,7 @@
  
 use crate::arm::threading::*;
 use crate::arm::exceptions::*;
+use crate::arm::cache::*;
 use crate::vm::vsysreg::*;
 use crate::vm::vsvc::*;
 use crate::vm::vmmio::*;
@@ -15,6 +16,7 @@ use crate::io::timer::*;
 use crate::util::*;
 use crate::logger::*;
 use alloc::string::String;
+use crate::vm::funcs::*;
 
 pub const EC_WFIWFE:        u8 = (0x01);
 pub const EC_ASIMD:         u8 = (0x07);
@@ -30,6 +32,13 @@ pub const EC_IABT_CUR_EL:   u8 = (0x21);
 pub const EC_PC_ALIGN:      u8 = (0x22);
 pub const EC_DABT_LOWER_EL: u8 = (0x24);
 pub const EC_DABT_CUR_EL:   u8 = (0x25);
+pub const EC_STEP_LOWER_EL: u8 = (0x32);
+
+static mut RET_ADDR_LAST: u64 = 0;
+static mut RET_ADDR_LAST_PRINT: u64 = 0;
+static mut IN_LOCK: bool = false;
+static mut BKPT_ADDR: u64 = 0;
+static mut BKPT_OLD: u32 = 0;
 
 pub const fn get_ifsc_dfsc_str<'a>(iss: &'a u32) -> &'a str
 {
@@ -133,9 +142,10 @@ pub fn get_mrsmsr_iss_str(iss: u32) -> String
 
 pub fn print_context(ctx: &[u64], is_dabt: bool)
 {
-    let esr_el2 = (get_esr_el2() & 0xFFFFFFFF);
+    let esr_el2 = (ctx[40] & 0xFFFFFFFF) as u32;
+    let elr_el2 = ctx[39];
     println!("esr_el2: {:08x} {}", esr_el2, vsvc_get_curpid_name());
-    println!("elr_el2: {:016x}", get_elr_el2());
+    println!("elr_el2: {:016x}", elr_el2);
     println!("elr_el1: {:016x}", get_elr_el1());
 
     println!("x0  {:016x} x1  {:016x} x2  {:016x} x3  {:016x} ", ctx[0], ctx[1], ctx[2], ctx[3]);
@@ -178,6 +188,7 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
     let mut iss_string = String::new();
     let mut ec_string = "unknown exception code";
     
+    let elr_el2 = ctx[39];
     let mut ret_addr = ret_addr_in;
 
     //iss_string[0] = 0;
@@ -291,18 +302,18 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
             {
                 ctx[9] += 4;
                 ctx[10] = *(u32*)0x7001b000;
-                ret_addr = get_elr_el2() + 4;
+                ret_addr = elr_el2 + 4;
                 return;
             }
             else if (*(u32*)translate_el1_stage12(ctx[31]) == 0xb8414D2A)
             {
                 ctx[10] = *(u32*)(translate_el1_stage12(ctx[9]));
                 ctx[9] += 4;
-                ret_addr = get_elr_el2() + 4;
+                ret_addr = elr_el2 + 4;
                 return;
             }*/
 
-            ret_addr = get_elr_el2() + 4;
+            ret_addr = elr_el2 + 4;
             //return;
         }
 
@@ -340,7 +351,7 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
             ec_string = "Breakpoint (current EL)";
         }
 
-        0x32 => {
+        EC_STEP_LOWER_EL => {
             ec_string = "Software Step (lower EL)";
         }
 
@@ -372,7 +383,7 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
             iss_unk = true;
             is_dabt = false;
             ec_unk = true;
-            ret_addr = 0;//get_elr_el2() + 4;
+            ret_addr = 0;//elr_el2 + 4;
             ec_string = "unknown exception code";
         }
     }
@@ -389,13 +400,15 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
     
     print_context(ctx, is_dabt);  
     
-    println!("translate {:016x} -> {:016x} (stage 1 {:016x})", ctx[8], translate_el1_stage12(ctx[8]), translate_el1_stage1(ctx[8]));
-    println!("translate {:016x} -> {:016x} (stage 1 {:016x}) {:x}", ctx[10], translate_el1_stage12(ctx[10]), translate_el1_stage1(ctx[10]), peek64(translate_el1_stage12(ctx[10])));
+    
+    
+    //println!("translate {:016x} -> {:016x} (stage 1 {:016x})", ctx[8], translate_el1_stage12(ctx[8]), translate_el1_stage1(ctx[8]));
+    //println!("translate {:016x} -> {:016x} (stage 1 {:016x}) {:x}", ctx[10], translate_el1_stage12(ctx[10]), translate_el1_stage1(ctx[10]), peek64(translate_el1_stage12(ctx[10])));
     //println!("translate {:016x} -> {:016x}\n\r", ctx[31], translate_el1_stage12(ctx[31]));
 
     if (is_dabt_lower)
     {
-        let pc_dump = ctx[19]-16;//get_elr_el1() - 16;//ctx[31]-16;
+        let pc_dump = ctx[31]-16;
         println!("translated PC {:016x}", translate_el1_stage12(pc_dump));
         println!("");
         if (translate_el1_stage12(pc_dump) >= 0x80000000 && translate_el1_stage12(pc_dump) < 0x200000000) {
@@ -408,12 +421,13 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
 
 pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 {
-    let esr_el2: u32 = (get_esr_el2() & 0xFFFFFFFF);
+    let esr_el2: u32 = (ctx[40] & 0xFFFFFFFF) as u32;
     let esr_el1: u32 = (get_esr_el1() & 0xFFFFFFFF);
     let mut ec: u8 = (esr_el2 >> 26) as u8;
     let mut iss: u32 = esr_el2 & 0x1FFFFFF;
 
-    let mut ret_addr: u64 = get_elr_el2() + 4;
+    let elr_el2 = ctx[39];
+    let mut ret_addr: u64 = elr_el2 + 4;
     /*if (get_core() == 3)
     {
         last_core_ret = ret_addr;
@@ -432,13 +446,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         if (hvc_num == 1)
         {
             // emulate ff 42 03 d5     msr        DAIFClr,#0x2
-            unsafe
-            {
-            let mut spsr_el2: u64 = 0;
-            asm!("mrs {0}, spsr_el2", out(reg) spsr_el2);
-            spsr_el2 &= !0x80;
-            asm!("msr spsr_el2, {0}", in(reg) spsr_el2);
-            }
+            ctx[38] &= !0x80;
 
             //TODO
             ret_addr = vsvc_pre_handle(iss, ctx);
@@ -446,13 +454,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         else if (hvc_num == 2) // SVC post-hook
         {
             // emulate df 42 03 d5     msr        DAIFSet,#0x2
-            unsafe
-            {
-            let mut spsr_el2: u64 = 0;
-            asm!("mrs {0}, spsr_el2", out(reg) spsr_el2);
-            spsr_el2 |= 0x80;
-            asm!("msr spsr_el2, {0}", in(reg) spsr_el2);
-            }
+            ctx[38] |= 0x80;
 
             //TODO
             ret_addr = vsvc_post_handle(iss, ctx);
@@ -460,30 +462,37 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         else if (hvc_num == 3)
         {
             // emulate ff 42 03 d5     msr        DAIFClr,#0x2
-            unsafe
-            {
-            let mut spsr_el2: u64 = 0;
-            asm!("mrs {0}, spsr_el2", out(reg) spsr_el2);
-            spsr_el2 &= !0x80;
-            asm!("msr spsr_el2, {0}", in(reg) spsr_el2);
-            }
+            ctx[38] &= !0x80;
 
             println!("(core {}) Unsupported SVC A32 hook!!", get_core());
-            ret_addr = get_elr_el2();
+            ret_addr = elr_el2;
         }
         else if (hvc_num == 4)
         {
             // emulate df 42 03 d5     msr        DAIFSet,#0x2
-            unsafe
-            {
-            let mut spsr_el2: u64 = 0;
-            asm!("mrs {0}, spsr_el2", out(reg) spsr_el2);
-            spsr_el2 |= 0x80;
-            asm!("msr spsr_el2, {0}", in(reg) spsr_el2);
-            }
+            ctx[38] |= 0x80;
 
             println!("(core {}) Unsupported SVC A32 hook!!", get_core());
-            ret_addr = get_elr_el2();
+            ret_addr = elr_el2;
+        }
+        else if (hvc_num == 5)
+        {
+            println!("BKPT!");
+            unsafe
+            {
+            let trans_bkpt = translate_el1_stage12(BKPT_ADDR);
+            poke32(trans_bkpt, BKPT_OLD);
+            
+            enable_single_step();
+            ctx[38] |= (1<<21); // spsr_el2
+            ret_addr = BKPT_ADDR;
+            
+            icache_invalidate(trans_bkpt, 0x10);
+            dcache_flush(trans_bkpt, 0x10);
+            
+            IN_LOCK = false;
+            BKPT_OLD = 0;
+            }
         }
         else if (ec == EC_DABT_LOWER_EL || ec == EC_IABT_LOWER_EL || ec == EC_PC_ALIGN)
         {
@@ -512,33 +521,33 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             }
             else
             {
-                ret_addr = get_elr_el2();
+                ret_addr = elr_el2;
                 ret_addr = print_exception(ec, iss, ctx, ret_addr);
             }
         }
         else if (ec == EC_SVC_A32 || ec == EC_SVC_A64)
         {
             //return vsvc_pre_handle((u8)iss, ctx);
-            ret_addr = get_elr_el2();
+            ret_addr = elr_el2;
         }
         else if (ec == EC_ASIMD)
         {
             //printf("(core {}) ASIMD sync IRQ, a process probably started\n\r", get_core());
-            ret_addr = get_elr_el2();
+            ret_addr = elr_el2;
         }
         else
         {
-            println!("(core {}) ec {:x} {:016x}", get_core(), ec, get_elr_el2());
+            println!("(core {}) ec {:x} {:016x}", get_core(), ec, elr_el2);
 
-            ret_addr = get_elr_el2();
+            ret_addr = elr_el2;
         }
         
         
         if (hvc_num == 0 && ec != 0x15)
         {
-            println!("(core {}) ec {:x} {:016x}", get_core(), ec, get_elr_el2());
+            println!("(core {}) ec {:x} {:016x}", get_core(), ec, elr_el2);
             ctx[17] = ctx[16] & 0x3F;
-            ret_addr = get_elr_el2();
+            ret_addr = elr_el2;
         }
         //mutex_unlock(&exception_print_mutex);
     }
@@ -558,9 +567,91 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
     {
         ret_addr = vmmio_handle_lowerel_dabt(iss, ctx);
     }
+    else if (ec == EC_STEP_LOWER_EL)
+    {
+        let mut re_enable = true;
+        ret_addr = elr_el2;
+        unsafe
+        {
+        if (RET_ADDR_LAST+4 != ret_addr && ret_addr != RET_ADDR_LAST_PRINT) {
+            println!("{:016x} {:016x} {:08x} {:08x}", ret_addr, ctx[31], ctx[38] & bit!(21), esr_el2);
+            RET_ADDR_LAST_PRINT = ret_addr;
+            
+            //print_exception(ec, iss, ctx, ret_addr);
+        }
+        
+        if (RET_ADDR_LAST == ret_addr) {
+            //println!("Stuck?");
+            //print_exception(ec, iss, ctx, ret_addr);
+            //re_enable = false;
+        }
+        
+        
+        }
+        
+        for i in 0..32
+        {
+            if (ctx[i] == 0x600040ac600040a4)
+            {
+                println!("aaaaa {:016x} {:016x}", ret_addr, ctx[31]);
+            }
+        }
+        
+        //disable_single_step();
+        if (re_enable) {
+        //enable_single_step();
+        ctx[38] |= (1<<21); // spsr_el2
+        //ctx[38] &= !(1<<21); // spsr_el2
+        }
+        
+        unsafe
+        {
+        
+        if (IN_LOCK)
+        {
+            //println!("{:x} {:x} {} {:x} {:x}", ret_addr, RET_ADDR_LAST, ret_addr < RET_ADDR_LAST, BKPT_OLD, BKPT_ADDR);
+        }
+        
+        // Try and bypass lock
+        if (IN_LOCK && ret_addr < RET_ADDR_LAST && BKPT_OLD == 0)
+        {
+            //ret_addr = RET_ADDR_LAST+4;
+            //IN_LOCK = false;
+            
+            BKPT_ADDR = RET_ADDR_LAST+4;
+            let trans_bkpt = translate_el1_stage12(BKPT_ADDR);
+            BKPT_OLD = peek32(trans_bkpt);
+            poke32(trans_bkpt, 0xd4000002 | (5 << 5));
+            disable_single_step();
+            ctx[38] &= !(1<<21); // spsr_el2
+            
+            icache_invalidate(trans_bkpt, 0x10);
+            dcache_flush(trans_bkpt, 0x10);
+        }
+        
+        
+        if ((esr_el2 & 0x40) != 0)
+        {
+            if (BKPT_OLD != 0) {
+                let trans_bkpt = translate_el1_stage12(BKPT_ADDR);
+                poke32(trans_bkpt, BKPT_OLD);
+
+                icache_invalidate(trans_bkpt, 0x10);
+                dcache_flush(trans_bkpt, 0x10);
+                
+
+                BKPT_OLD = 0;
+            }
+            IN_LOCK = true;
+        }
+        
+        RET_ADDR_LAST = ret_addr;
+        }
+    }
     else
     {
         ret_addr = print_exception(ec, iss, ctx, ret_addr);
+        ret_addr = 0;
     }
 
     if (ret_addr == 0)

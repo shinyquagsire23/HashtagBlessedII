@@ -13,5 +13,18 @@ extern "C" {
     pub fn drop_to_el1(entry: u64);
     pub fn vttbr_apply(ttb: *const u64);
     pub fn disable_smcstuff();
+    pub fn _enable_single_step();
+    pub fn _disable_single_step();
+}
+
+pub fn enable_single_step()
+{
+    unsafe { _enable_single_step(); }
+}
+
+
+pub fn disable_single_step()
+{
+    unsafe { _disable_single_step(); }
 }
 

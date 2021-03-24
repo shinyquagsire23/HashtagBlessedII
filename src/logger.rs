@@ -23,6 +23,7 @@ use crate::arm::threading::*;
 static LOGGER_MUTEX: spin::Mutex<()> = spin::Mutex::new(());
 
 static mut LOGGER_DATA: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
+static mut LOGGER_CMD: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
 
 #[macro_use]
 mod logger {
@@ -80,6 +81,7 @@ pub fn logger_init()
         for i in 0..8
         {
             LOGGER_DATA[i] = Some(VecDeque::new());
+            LOGGER_CMD[i] = Some(VecDeque::new());
         }
     }
     
@@ -120,7 +122,7 @@ pub fn log_uarta_raw(data: &[u8])
 pub fn log_usb(data: &str)
 {
     let usbd = get_usbd();
-
+    
     debug_send(usbd, data.as_bytes());
 }
 
@@ -177,7 +179,7 @@ pub fn log_process()
                 drop(data);
                 
                 if next_line >= data_len {
-                    logger_data.clear()
+                    logger_data.clear();
                 }
                 else {
                     let mut i = 0;
@@ -189,6 +191,37 @@ pub fn log_process()
             for core_iter in 0..8
             {
                 let mut logger_data = LOGGER_DATA[core_iter].as_mut().unwrap();
+                
+                if (!logger_data.is_empty())
+                {
+                    is_done = false;
+                }
+            }
+            
+            if is_done { break; }
+        }
+        
+        // USB side-channel data
+        loop
+        {
+            for core_iter in 0..8
+            {
+                let mut logger_data = LOGGER_CMD[core_iter].as_mut().unwrap();
+                
+                if (logger_data.is_empty())
+                {
+                    continue;
+                }
+
+                log_usb_raw(logger_data.make_contiguous());
+                
+                logger_data.clear();
+            }
+            
+            let mut is_done = true;
+            for core_iter in 0..8
+            {
+                let mut logger_data = LOGGER_CMD[core_iter].as_mut().unwrap();
                 
                 if (!logger_data.is_empty())
                 {
@@ -217,6 +250,25 @@ pub fn log_raw(data: &[u8])
         let lock = LOGGER_MUTEX.lock();
 
         let mut logger_data = LOGGER_DATA[get_core() as usize].as_mut().unwrap();
+        
+        for byte in data
+        {
+            logger_data.push_back(*byte);
+        }
+        
+        critical_end();
+    }
+}
+
+pub fn log_cmd(data: &[u8])
+{
+    unsafe
+    {
+        critical_start();
+        
+        let lock = LOGGER_MUTEX.lock();
+
+        let mut logger_data = LOGGER_CMD[get_core() as usize].as_mut().unwrap();
         
         for byte in data
         {

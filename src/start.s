@@ -184,6 +184,13 @@ exception_print:
     stp x26, x27, [sp, #0xD0]
     str x28, [sp, #0xE0]
     str x30, [sp, #0xF0]
+    
+    mrs	x21, spsr_el2
+    mrs	x22, elr_el2
+    stp	x21, x22, [sp, #0x130] // 38,39
+    mrs	x22, esr_el2
+    str x22, [sp, #0x140] // 40
+    
 #if 0
     mrs	x0, fpsr
     str	x0, [sp, #0x1F0]
@@ -259,6 +266,7 @@ hyp_preserve:
     b _do_except
 
 _do_except:
+
     sub sp, sp, #0x10
     str lr, [sp]
     
@@ -271,7 +279,19 @@ _do_except:
     
     cmp x0, #0x0
     beq t210_reset
+    
+    msr daifclr, #0b0001
+    isb
+    
+    nop
+    nop
+    
     msr elr_el2, x0
+    
+    ldp	x21, x22, [sp, #0x130] // 38,39
+    msr	spsr_el2, x21
+    //msr	elr_el2, x22
+    
 
 #if 0
     ldr	x0, [sp, #0x1F0]

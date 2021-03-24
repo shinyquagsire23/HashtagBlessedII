@@ -6,6 +6,7 @@
 
 use crate::arm::exceptions::*;
 use crate::arm::threading::*;
+use crate::vm::funcs::*;
 
 pub fn vsvc_init()
 {
@@ -38,6 +39,10 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
 {
     let svc_num = iss & 0xFF;
     println!("(core {}) SVC 0x{:02x}, pid {:02x}", get_core(), svc_num, vsvc_get_curpid());
+    if (get_core() == 3 && vsvc_get_curpid() == 1) {
+        enable_single_step();
+        ctx[38] |= (1<<21);
+    }
     return get_elr_el2();
 }
 

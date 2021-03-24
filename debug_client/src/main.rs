@@ -121,6 +121,39 @@ fn find_device() -> Option<(rusb::DeviceHandle<rusb::GlobalContext>, u8, u8, u8)
     return Some((handle_unwrap, iface_num, ep_in_num, ep_out_num));
 }
 
+fn process_input(input_buf: &[u8; 64], n: usize)
+{
+    if input_buf[0] == 1 {
+        print!("Received cmd stream... ");
+        for i in 1..n
+        {
+            print!("{:02x} ", input_buf[i]);
+        }
+        println!("");
+    }
+    else
+    {
+        let mut null_term = 0;
+        loop
+        {
+            if null_term >= n {
+                break;
+            }
+
+            if input_buf[null_term] == 0 {
+                break
+            }
+            null_term += 1;
+        }
+        
+        let read_str = str::from_utf8(&input_buf[..null_term]);
+        if read_str.is_ok() {
+            let read_str_good = str::replace(read_str.unwrap(), "\r\n", "\n");
+            print!("{}", read_str_good);
+        }
+    }
+}
+
 fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u8, ep_out_num: u8) -> bool
 {
     let mut input_buf: [u8; 64] = [0; 64];
@@ -136,23 +169,8 @@ fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u
         Ok(n) => {
             //println!("Read {} bytes", n);
             
-            let mut null_term = 0;
-            loop
-            {
-                if null_term >= n {
-                    break;
-                }
-
-                if input_buf[null_term] == 0 {
-                    break
-                }
-                null_term += 1;
-            }
-            
-            let read_str = str::from_utf8(&input_buf[..null_term]);
-            if read_str.is_ok() {
-                let read_str_good = str::replace(read_str.unwrap(), "\r\n", "\n");
-                print!("{}", read_str_good);
+            if n >= 1 {
+                process_input(&input_buf, n);
             }
         },
     };

@@ -170,6 +170,8 @@ pub extern "C" fn main_cold()
     {
         timer_wait(1000);
     }
+    
+    log_cmd(&[1, 0, 0, 0, 0]);
 
     timer_trap_el1();
 
@@ -197,14 +199,14 @@ pub extern "C" fn main_cold()
             println!("Hooking addr {:016x}", search);
             if (peek32(search + 4) == 0xd63f0160) // A64
             {
-                //poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
-                //poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
+                poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
+                poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
                 a64_hooked = true;
             }
             else if (peek32(search + 4) == 0xd63f0260) // A32
             {
-                //poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
-                //poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
+                poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
+                poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
                 a32_hooked = true;
             }
         }
