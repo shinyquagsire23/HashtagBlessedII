@@ -2,3 +2,6 @@
 copy-junk.sh
 hashtagblessed.bin
 data/*.bin
+debug_client/target
+debug_client/Cargo.lock
+Cargo.lock
