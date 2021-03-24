@@ -8,7 +8,7 @@ use core::ptr::NonNull;
 use crate::io::uart::*;
 use crate::io::timer::*;
 use crate::usbd::usbd::*;
-use crate::usbd::cdc::*;
+use crate::usbd::debug::*;
 use core::str;
 use spin::Mutex;
 use alloc::sync::Arc;
@@ -121,14 +121,14 @@ pub fn log_usb(data: &str)
 {
     let usbd = get_usbd();
 
-    //cdc_send(usbd, data.as_bytes(), data.len());
+    debug_send(usbd, data.as_bytes(), data.len());
 }
 
 pub fn log_usb_raw(data: &[u8])
 {
     let usbd = get_usbd();
 
-    //cdc_send(usbd, data, data.len());
+    debug_send(usbd, data, data.len());
 }
 
 pub fn log_process()
@@ -205,6 +205,11 @@ pub fn log_process()
 
 pub fn log(data: &str)
 {
+    log_raw(data.as_bytes());
+}
+
+pub fn log_raw(data: &[u8])
+{
     unsafe
     {
         critical_start();
@@ -213,9 +218,9 @@ pub fn log(data: &str)
 
         let mut logger_data = LOGGER_DATA[get_core() as usize].as_mut().unwrap();
         
-        for byte in data.bytes()
+        for byte in data
         {
-            logger_data.push_back(byte);
+            logger_data.push_back(*byte);
         }
         
         critical_end();
@@ -232,12 +237,6 @@ pub fn logln_unsafe(data: &str)
 {
     log_unsafe(data);
     log_unsafe("\r\n");
-}
-
-pub fn log_raw(data: &[u8])
-{
-    log_uarta_raw(data);
-    log_usb_raw(data);
 }
 
 pub fn logln(data: &str)

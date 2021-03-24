@@ -23,7 +23,7 @@ pub struct DebugGadget
 {
     isactive: bool,
     enabled: bool,
-    lineState: u16,
+    has_acked: bool,
     if0: u8,
     if0_epBulkOut: u8,
     if0_epBulkIn: u8,
@@ -39,7 +39,7 @@ impl DebugGadget
         {
             isactive: false,
             enabled: false,
-            lineState: 0,
+            has_acked: false,
             if0: 0xff,
             if0_epBulkOut: 0xff,
             if0_epBulkIn: 0xff,
@@ -91,6 +91,16 @@ pub fn debug_active() -> bool
     unsafe { asm!("add xzr, xzr, {0}", in(reg) &debug); }
     
     return debug.isactive;
+}
+
+pub fn debug_acked() -> bool
+{
+    let debug = get_debug();
+    
+    // keep compiler from optimizing this in a dumb way
+    unsafe { asm!("add xzr, xzr, {0}", in(reg) &debug); }
+    
+    return debug.has_acked;
 }
 
 pub fn debug_send(usbd: &mut UsbDevice, data: &[u8], len: usize)
@@ -148,10 +158,22 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
     let pkt_data: *mut u8 = p_pkt_data as _;
     let len = usbd.get_bytes_received(debug.if0_epBulkOut);
     
-    println_uarta!("read {} bytes", len);
+    // Magic value to start debugging
+    if len >= 4 && !debug.has_acked {
+        let pkt_magic: *mut u32 = p_pkt_data as _;
+        if (pkt_magic.read() == 0xF00FF00F) {
+            debug.has_acked = true;
+            return;
+        }
+    }
+    
+    //println!("read {} bytes", len);
     
     let mut to_send: Vec<u8> = Vec::with_capacity(DEBUG_BULK_PKT_SIZE as usize);
     let p_to_send = to_u64ptr!(to_send.as_mut_ptr());
+    
+    // Send our data
+    log_raw(&to_send.as_slice());
     
     // Convert the strings or whatever
     for i in 0..(len as usize)
@@ -160,37 +182,27 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
         if (val == 0) { continue; }
 
         debug.cmd_buf.push(val as char);
-        if (val == '\r' as u8)
+        to_send.push(val);
+        
+        if (val == '\n' as u8)
         {
+            // Send our data
+            log_raw(&to_send.as_slice());
+    
             debug.cmd_buf.pop();
             debug_process_cmd();
+            to_send.clear();
         }
-
-        if (val == '\r' as u8)
-        {
-            to_send.push('\n' as u8);
-        }
-        to_send.push(val);
     }
     
-    to_send.push(0);
-    //printf("%s", to_send);
-
     // Send our data
-    debug.enabled = true;
-    debug.isactive = true;
-    debug_send(usbd, to_send.as_slice() as &[u8], to_send.len());
+    log_raw(&to_send.as_slice());
     }
 }
 
 pub fn debug_if0_sendcomplete(usbd: &mut UsbDevice, epNum: u8)
 {
     let debug = get_debug();
-    
-    debug.enabled = true;
-    debug.isactive = true;
-    
-    println_uarta!("sent bytes");
 }
 
 pub fn debug_if0_recvfail(usbd: &mut UsbDevice, epNum: u8)
@@ -199,7 +211,7 @@ pub fn debug_if0_recvfail(usbd: &mut UsbDevice, epNum: u8)
 
     let len = usbd.get_bytes_received(debug.if0_epBulkOut);
     
-    println_uarta!("read {} bytes then failed!", len);
+    //println!("read {} bytes then failed!", len);
 }
 
 pub fn debug_if0_sendfail(usbd: &mut UsbDevice, epNum: u8)
@@ -208,14 +220,15 @@ pub fn debug_if0_sendfail(usbd: &mut UsbDevice, epNum: u8)
     
     let len = usbd.get_bytes_received(debug.if0_epBulkIn);
     
-    println_uarta!("sent {} bytes then failed!", len);
+    //println!("sent {} bytes then failed!", len);
 }
 
 pub fn debug_if0_recvidle(usbd: &mut UsbDevice, epNum: u8)
 {
     let debug = get_debug();
-
-    println_uarta!("recv idle");
+    
+    debug.enabled = true;
+    debug.isactive = true;
 
     // Get more data
     usbd.ep_txfer_start(debug.if0_epBulkOut, DEBUG_BULK_PKT_SIZE as usize, false);
@@ -224,8 +237,9 @@ pub fn debug_if0_recvidle(usbd: &mut UsbDevice, epNum: u8)
 pub fn debug_if0_sendidle(usbd: &mut UsbDevice, epNum: u8)
 {
     let debug = get_debug();
-
-    println_uarta!("send idle");
+    
+    debug.enabled = true;
+    debug.isactive = true;
 }
 
 pub fn debug_reset_hook(usbd: &mut UsbDevice)
@@ -234,7 +248,7 @@ pub fn debug_reset_hook(usbd: &mut UsbDevice)
     
     debug.isactive = false;
     debug.enabled = false;
-    debug.lineState = 0;
+    debug.has_acked = false;
     debug.cmd_buf.clear();
 }
 

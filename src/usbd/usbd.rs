@@ -1988,7 +1988,6 @@ impl UsbDevice
             if (!self.endpoints[i].isEnabled) { i += 1; continue; }
             
             let stat = self.ep_status(i as u8) as u8;
-            println_uarta!("{} {} {} completed", i, self.endpoints[i].isEnabled, stat);
             
             if (self.ep_status(i as u8) == UsbEpStatus::TxfrComplete)
             {
@@ -2155,7 +2154,7 @@ pub fn irq_usb()
     // A USB reset was requested
     if ((usbSts & USBSTS_USBRST) != 0)
     {
-        println_uarta!("usbd: reset requested");
+        println!("usbd: reset requested");
         usbd.halt_activity();
         
         // Run through reset handlers
@@ -2171,35 +2170,30 @@ pub fn irq_usb()
         if (result != UsbdError::Success) {
             return;
         }
-        println_uarta!("reset done?");
     }
     
     // Cable was reinserted
     if ((usbSts & USBSTS_USBPORT) != 0)
     {
-        println_uarta!("usbd: cable reinserted");
+        println!("usbd: cable reinserted");
     }
     
     // Check for incoming setup packets and handle them
     result = usbd.handle_control_req();
     if ((result != UsbdError::Success) && !usbd.is_enumeration_done()) {
-        println_uarta!("usbd: done int err ctrl");
         return;
     }
     
     // Don't talk to endpoints until we're enumerated
     if (!usbd.is_enumeration_done()) {
-        println_uarta!("usbd: done int no enum");
         return;
     }
     
     // Call endpoint handlers as appropriate
     result = usbd.handle_endpoints();
     if (result != UsbdError::Success) {
-        println_uarta!("usbd: done int err endpoint");
         return;
     }
-    println_uarta!("usbd: done int");
     
     return;
 }

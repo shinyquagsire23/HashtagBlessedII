@@ -158,13 +158,11 @@ pub extern "C" fn main_cold()
     println!("");
     println!("Waddup from EL2!");
     
-    while (!debug_active())
+    while (!debug_active() && !debug_acked())
     {
         timer_wait(1000);
     }
     debug_enable();
-    
-    loop{timer_wait(1000);}
     
     println!("USB connection recovered!");
 
