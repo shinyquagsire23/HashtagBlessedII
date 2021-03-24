@@ -165,6 +165,11 @@ pub extern "C" fn main_cold()
     debug_enable();
     
     println!("USB connection recovered!");
+    timer_wait(2000000);
+    while (!debug_active() && !debug_acked())
+    {
+        timer_wait(1000);
+    }
 
     timer_trap_el1();
 

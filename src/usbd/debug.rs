@@ -103,7 +103,7 @@ pub fn debug_acked() -> bool
     return debug.has_acked;
 }
 
-pub fn debug_send(usbd: &mut UsbDevice, data: &[u8], len: usize)
+pub fn debug_send(usbd: &mut UsbDevice, data: &[u8])
 {
     let debug = get_debug();
     
@@ -111,7 +111,7 @@ pub fn debug_send(usbd: &mut UsbDevice, data: &[u8], len: usize)
 
     let is_enabled = /*debug.enabled && debug.isactive &&*/ (get_core() == 0);
 
-    if (len == 0)
+    if (data.len() == 0)
     {
         //mutexUnlock(&debug_send_mutex);
         return;
@@ -119,7 +119,7 @@ pub fn debug_send(usbd: &mut UsbDevice, data: &[u8], len: usize)
 
     if (is_enabled /*&& mutexTryLock(&debug_usb_mutex)*/)
     {
-        let mut bytes_to_send: i32 = len as i32;
+        let mut bytes_to_send: i32 = (data.len() & 0x7FFFFFFF) as i32;
         //mutexUnlock(&debug_send_mutex);
 
         let mut i = 0;
@@ -165,6 +165,12 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
             debug.has_acked = true;
             return;
         }
+    }
+    
+    // Parse binary command
+    if pkt_data.read() == 1 {
+        
+        return;
     }
     
     //println!("read {} bytes", len);

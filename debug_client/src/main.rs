@@ -48,8 +48,10 @@ macro_rules! print {
     }};
 }
 
-fn find_device() -> Option<rusb::DeviceHandle<rusb::GlobalContext>>
+fn find_device() -> Option<(rusb::DeviceHandle<rusb::GlobalContext>, u8, u8, u8)>
 {
+    let mut handle: Option<rusb::DeviceHandle<rusb::GlobalContext>> = None;
+
     for device in rusb::devices().unwrap().iter() {
         let device_desc = device.device_descriptor().unwrap();
         
@@ -63,10 +65,60 @@ fn find_device() -> Option<rusb::DeviceHandle<rusb::GlobalContext>>
         
         match device.open() {
                Err(_e) => { println!("{}", _e); continue;},
-               Ok(h) => return Some(h),
+               Ok(h) => { handle = Some(h); break; },
         };
     }
-    return None;
+    
+    if !handle.is_some() {
+        return None;
+    }
+    
+    let handle_unwrap = handle.unwrap();
+    let device = handle_unwrap.device();
+    let device_desc = device.device_descriptor().unwrap();
+    let num_configs = device_desc.num_configurations();
+    let mut iface_num = 0xff;
+    let mut ep_in_num = 0xff;
+    let mut ep_out_num = 0xff;
+    
+    for config_idx in 0..num_configs
+    {
+        let config_desc = device.config_descriptor(config_idx).unwrap();
+        for interface in config_desc.interfaces()
+        {
+            for iface_desc in interface.descriptors()
+            {
+                if iface_desc.class_code() != 0xFF
+                    || iface_desc.sub_class_code() != 0xFF
+                    || iface_desc.protocol_code() != 0xFF {
+                    continue;
+                }
+                iface_num = interface.number();
+                
+                for endpoint in iface_desc.endpoint_descriptors()
+                {
+                    if endpoint.direction() == rusb::Direction::In
+                    {
+                        ep_in_num = endpoint.address();
+                    }
+                    else if endpoint.direction() == rusb::Direction::Out
+                    {
+                        ep_out_num = endpoint.address();
+                    }
+                }
+                
+                break;
+            }
+        }
+    }
+    
+    if iface_num == 0xff || ep_in_num == 0xff || ep_out_num == 0xff
+    {
+        println!("No valid interfaces found?");
+        return None;
+    }
+    
+    return Some((handle_unwrap, iface_num, ep_in_num, ep_out_num));
 }
 
 fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u8, ep_out_num: u8) -> bool
@@ -153,53 +205,13 @@ fn main() -> Result<(), Error>
         
         wclear(stdscr());
         
-        let mut handle = handle_try.unwrap();
-
-        let device = handle.device();
-        let device_desc = device.device_descriptor().unwrap();
-        let num_configs = device_desc.num_configurations();
-        let mut iface_num = 0xff;
-        let mut ep_in_num = 0xff;
-        let mut ep_out_num = 0xff;
+        let handle_dat = handle_try.unwrap();
+        let mut handle = handle_dat.0;
+        let iface_num = handle_dat.1;
+        let ep_in_num = handle_dat.2;
+        let ep_out_num = handle_dat.3;
         
-        for config_idx in 0..num_configs
-        {
-            let config_desc = device.config_descriptor(config_idx).unwrap();
-            for interface in config_desc.interfaces()
-            {
-                for iface_desc in interface.descriptors()
-                {
-                    if iface_desc.class_code() != 0xFF
-                        || iface_desc.sub_class_code() != 0xFF
-                        || iface_desc.protocol_code() != 0xFF {
-                        continue;
-                    }
-                    iface_num = interface.number();
-                    
-                    for endpoint in iface_desc.endpoint_descriptors()
-                    {
-                        if endpoint.direction() == rusb::Direction::In
-                        {
-                            ep_in_num = endpoint.address();
-                        }
-                        else if endpoint.direction() == rusb::Direction::Out
-                        {
-                            ep_out_num = endpoint.address();
-                        }
-                    }
-                    
-                    break;
-                }
-            }
-        }
-        
-        if iface_num == 0xff || ep_in_num == 0xff || ep_out_num == 0xff
-        {
-            println!("No valid interfaces found?");
-            return Ok(());
-        }
-        
-        println!("Connected!\n-------------");
+        println!("Connected!\n----------");
         
         let try_reset = handle.reset();
         if try_reset.is_err()
