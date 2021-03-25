@@ -28,9 +28,18 @@ fn main() {
     let mut handlers: Vec<String> = Vec::new();
     let mut svcs: Vec<(String, String)> = Vec::new();
     
+    let mut ignore_commented = false;
     if let Ok(lines) = read_lines("src/vm/vsvc.rs") {
         for line_try in lines {
             if let Ok(line) = line_try {
+                if line.contains("/*") {
+                    ignore_commented = true;
+                }
+                if line.contains("*/") {
+                    ignore_commented = false;
+                }
+                if ignore_commented { continue; }
+                
                 if line.contains("impl") {
                     let split: Vec<&str> = line.split(' ').collect();
                     
@@ -46,6 +55,14 @@ fn main() {
     if let Ok(lines) = read_lines("src/hos/svc.rs") {
         for line_try in lines {
             if let Ok(line) = line_try {
+                if line.contains("/*") {
+                    ignore_commented = true;
+                }
+                if line.contains("*/") {
+                    ignore_commented = false;
+                }
+                if ignore_commented { continue; }
+                
                 if line.contains("enum HorizonSvc") {
                     found_enum = true;
                 }

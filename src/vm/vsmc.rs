@@ -150,7 +150,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
 
     if (ctx[0] != 0)
     {
-        println!("(core {}) SMC #{} Smc{} returned {:08x}", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0]);
+        //println!("(core {}) SMC #{} Smc{} returned {:08x}", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0]);
     }
     
 /*    if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_PROGRAMVERIFY)

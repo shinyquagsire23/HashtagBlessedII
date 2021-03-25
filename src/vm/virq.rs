@@ -146,7 +146,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
         {
         let mut tmp: u64 = 0;
 
-        tmp = 0x10000;
+        tmp = 0x80000;
         asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
         tmp = 0x1;
         asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
