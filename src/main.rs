@@ -22,6 +22,8 @@
 extern crate alloc;
 extern crate spin;
 
+extern crate derive_more;
+
 mod heap;
 
 #[macro_use] mod util;
@@ -80,9 +82,9 @@ const KERN_DATA: &[u8] = include_bytes!("../data/0_kernel_80060000.bin");
 static ALLOCATOR: HtbHeap = HtbHeap::empty();
 
 #[repr(align(0x1000))]
-struct PageAlignedHeapAlloc([u8; 0x800000]);
+struct PageAlignedHeapAlloc([u8; 0x400000]);
 
-static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x800000]);
+static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x400000]);
 
 #[no_mangle]
 pub extern "C" fn main_warm() 
@@ -123,7 +125,7 @@ pub extern "C" fn main_cold()
 {
     fpu_enable();
     
-    unsafe { ALLOCATOR.init((HEAP_RES.0.as_ptr() as *const u8) as usize, 0x100000); }
+    unsafe { ALLOCATOR.init((HEAP_RES.0.as_ptr() as *const u8) as usize, 0x400000); }
     
     let mut uart_a: UARTDevice = UARTDevice::new(UartA);
     uart_a.init(115200);

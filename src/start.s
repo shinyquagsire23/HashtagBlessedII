@@ -190,14 +190,7 @@ exception_print:
     stp	x21, x22, [sp, #0x130] // 38,39
     mrs	x22, esr_el2
     str x22, [sp, #0x140] // 40
-    
-#if 0
-    mrs	x0, fpsr
-    str	x0, [sp, #0x1F0]
 
-    mrs	x0, fpcr
-    str	x10, [sp, #0x1F8]
-#endif
     mrs x0, spsr_el2
     and x0, x0, 0xC
     cmp x0, #(0x2 << 2)
@@ -292,14 +285,6 @@ _do_except:
     msr	spsr_el2, x21
     //msr	elr_el2, x22
     
-
-#if 0
-    ldr	x0, [sp, #0x1F0]
-    msr	fpsr, x0
-
-    ldr	x0, [sp, #0x1F8]
-    msr	fpcr, x0
-#endif
     ldp x0, x1, [sp, #0x0]
     ldp x2, x3, [sp, #0x10]
     ldp x4, x5, [sp, #0x20]
@@ -342,13 +327,7 @@ irq_print:
     stp x26, x27, [sp, #0xD0]
     str x28, [sp, #0xE0]
     str x30, [sp, #0xF0]
-#if 0
-    mrs	x0, fpsr
-    str	x0, [sp, #0x1F0]
 
-    mrs	x0, fpcr
-    str	x10, [sp, #0x1F8]
-#endif
     mrs x0, spsr_el2
     and x0, x0, 0xC
     cmp x0, #(0x2 << 2)

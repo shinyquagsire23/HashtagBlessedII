@@ -13,9 +13,12 @@ use core::{
 };
 use derive_more::Display;
 use executor::Executor;
+use svc_executor::{SvcExecutor, SvcTask, SvcTaskId};
 
 pub mod executor;
 pub mod sleep;
+pub mod svc_executor;
+pub mod svc_wait;
 
 pub struct Task
 {
@@ -53,12 +56,14 @@ impl TaskId
 }
 
 static mut EXECUTOR: Option<Executor> = None;
+static mut SVC_EXECUTOR: Option<SvcExecutor> = None;
 
 pub fn task_init()
 {
     unsafe
     {
         EXECUTOR = Some(Executor::new());
+        SVC_EXECUTOR = Some(SvcExecutor::new());
     }
 }
 
@@ -87,5 +92,35 @@ pub fn task_advance()
     {
         let mut executor = EXECUTOR.as_mut().unwrap();
         executor.advance();
+    }
+}
+
+pub fn task_advance_svc(task_id: SvcTaskId) -> Option<[u64; 32]>
+{
+    unsafe
+    {
+        let mut executor = SVC_EXECUTOR.as_mut().unwrap();
+        executor.run_svc(task_id)
+    }
+}
+
+pub fn task_advance_svc_ctx(thread_ctx: u64) -> Option<[u64; 32]>
+{
+    unsafe
+    {
+        let mut executor = SVC_EXECUTOR.as_mut().unwrap();
+        executor.run_svc(SvcTaskId(thread_ctx))
+    }
+}
+
+pub fn task_run_svc(thread_ctx: u64, future: impl Future<Output = ([u64; 32])> + 'static) -> SvcTaskId
+{
+    unsafe
+    {
+        let mut executor = SVC_EXECUTOR.as_mut().unwrap();
+        let task = SvcTask::new(thread_ctx, future);
+        let task_id = task.id;
+        executor.queue(task);
+        return task_id;
     }
 }
