@@ -431,11 +431,6 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
     let elr_el2 = ctx[39];
     let mut ret_addr: u64 = elr_el2 + 4;
-    if (get_core() == 3)
-    {
-        task_advance();
-        irq_usb();
-    }
 
     let start_ticks: u64 = vsysreg_getticks();
     let mut end_ticks: u64 = start_ticks;

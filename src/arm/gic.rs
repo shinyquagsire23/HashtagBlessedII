@@ -7,6 +7,7 @@
 use crate::util::*;
 use crate::arm::threading::*;
 use crate::vm::virq::*;
+use alloc::collections::vec_deque::VecDeque;
 
 pub const GICD_BASE: u32 = 0x50041000;
 pub const GICC_BASE: u32 = 0x50042000;
@@ -294,7 +295,7 @@ impl GICHRegs
     
     pub fn init(&mut self)
     {
-        //self.gich_hcr |= bit!(0);
+        self.gich_hcr |= bit!(0);
         self.gich_vmcr |= bit!(0);// | BIT(9);// | BIT(9);// | BIT(9);
     }
 }
@@ -328,9 +329,8 @@ pub struct GIC
     pub gicv: GICVRegs,
 }
 
-pub const LR_QUEUE_SIZE: usize = 2048;
 static mut LR_QUEUEPOSES: [u32; 8] = [0; 8];
-static mut CPU_LR_QUEUES: [[u32; LR_QUEUE_SIZE]; 8] = [[0; LR_QUEUE_SIZE]; 8];
+static mut CPU_LR_QUEUES: [Option<VecDeque<u32>>; 8] = [None, None, None, None, None, None, None, None];
 
 impl GIC
 {
@@ -372,6 +372,16 @@ impl GIC
         
         self.gich.init();
         self.gicc.enable_eio();
+        
+        if (get_core() == 0) {
+            unsafe
+            {
+                for i in 0..8
+                {
+                    CPU_LR_QUEUES[i] = Some(VecDeque::new());
+                }
+            }
+        }
     }
     
     pub fn enable_interrupt(&mut self, num: u16, core: u8)
@@ -439,44 +449,13 @@ impl GIC
         self.gicd.enable_distribution();
     }
     
-    pub fn cpu_lr_queue_push(&mut self, lr_val: u32)
-    {
-        unsafe
-        {
-        if (LR_QUEUEPOSES[get_core() as usize] >= LR_QUEUE_SIZE as u32)
-        {
-            println!("(core {}) !! LR QUEUE EXHAUSTED! {:x}", get_core(), lr_val);
-            return;
-        }
-        let queue_pos = LR_QUEUEPOSES[get_core() as usize] as usize;
-        CPU_LR_QUEUES[get_core() as usize][queue_pos] = lr_val; //TODO
-        LR_QUEUEPOSES[get_core() as usize] += 1;
-        }
-    }
-    
-    pub fn cpu_lr_queue_pop(&mut self) -> u32
-    {
-        unsafe
-        {
-        if (LR_QUEUEPOSES[get_core() as usize] <= 0)
-        {
-            println!("(core {}) !! BAD LR POP!", get_core());
-            return 0;
-        }
-
-        LR_QUEUEPOSES[get_core() as usize] -= 1;
-        let queue_pos = LR_QUEUEPOSES[get_core() as usize] as usize;
-        return CPU_LR_QUEUES[get_core() as usize][queue_pos];
-        }
-    }
-    
     pub fn find_lr_slot(&mut self) -> u8
     {
         unsafe
         {
         // find an open slot
         let virq_status = self.gich.gich_elsr0.r32();
-        for i in 0..32 // TODO read this max val
+        for i in 0..4 // TODO read this max val
         {
             if ((virq_status & bit!(i)) != 0)
             {
@@ -499,17 +478,25 @@ impl GIC
         {
             if ((virq_status & bit!(i)) != 0)
             {
-                let hwint_id = (self.gich.gich_lr.idx32(i).r32() & LR_IRQ_MASK);
-                println!("Cleared {:x}", hwint_id);
+                let lr_iter_val = self.gich.gich_lr.idx32(i).r32();
+                let lr_state = (lr_iter_val >> 28) & 3;
+                let lr_vid = (lr_iter_val & LR_IRQ_MASK);
+                let lr_cpu = (lr_iter_val >> 10) & 3;
+                
+                self.set_dir(lr_vid | (lr_cpu << 10));
+                
+                //println!("Cleared {:x}", hwint_id);
                 self.gich.gich_lr.idx32(i).w32(0);
             }
         }
 
         let mut lr_slot = self.find_lr_slot();
+        
+        let queue = CPU_LR_QUEUES[get_core() as usize].as_mut().unwrap();
 
-        while (LR_QUEUEPOSES[get_core() as usize] != 0 && lr_slot != LR_INVALID_SLOT)
+        while (!queue.is_empty() && lr_slot != LR_INVALID_SLOT)
         {
-            let lr_val = self.cpu_lr_queue_pop();
+            let lr_val = queue.pop_front().unwrap();
 
             // make sure we're not sending a request that is already pending
             for i in 0..4
@@ -523,17 +510,16 @@ impl GIC
                 let lrval_prio = (lr_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
                 let lrval_cpu = (lr_val >> 10) & 3;
                 let int_id = (lr_val & 0x3FF) as u16;
-                if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == lrval_cpu && (lr_state == LR_STS_PENDING))
+                if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == lrval_cpu) // | pending bit if only active?
                 {
+                    println!("Didn't push IRQ {}!", int_id);
                     lr_slot = LR_INVALID_SLOT;
-                    //self.cpu_lr_queue_push(lr_val);
                     break;
                 }
                 else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id && (lr_state != LR_STS_INVALID))
                 {
                     println!("Didn't push IRQ {}!", int_id);
                     lr_slot = LR_INVALID_SLOT;
-                    //self.cpu_lr_queue_push(lr_val);
                     break;
                 }
 
@@ -543,10 +529,19 @@ impl GIC
                     break;
                 }*/
             }
+            
+            if (lr_slot >= 4) 
+            {
+                lr_slot = LR_INVALID_SLOT;
+            }
+            
+            if (lr_slot == LR_INVALID_SLOT)
+            {
+                queue.push_front(lr_val);
+                break;
+            }
 
-            if (lr_slot >= 4) { continue; }
-            self.gich.gich_lr.idx32(lr_slot as u32).w32(lr_val | ((lr_slot as u32) << LR_PRIO_SHIFT));
-            //println!("(core {}) using queue! pos {:x}", get_core(), LR_QUEUEPOSES[get_core() as usize]);
+            self.gich.gich_lr.idx32(lr_slot as u32).w32(lr_val);
 
             lr_slot = self.find_lr_slot();
         }
@@ -562,15 +557,9 @@ impl GIC
 
         // didn't deplete the queue and we still have entries,
         // IRQ on no pending to make sure the queue gets handled
-        if (LR_QUEUEPOSES[get_core() as usize] != 0 || lr_slot == LR_INVALID_SLOT)
+        if (!queue.is_empty())
         {
-            if (taken_slots >= 2) {
-                self.gich.gich_hcr |= GICH_INT_U;
-            }
-            else {
-                self.gich.gich_hcr |= GICH_INT_NP;
-            }
-
+            self.gich.gich_hcr |= GICH_INT_U;
         }
         }
     }
@@ -580,18 +569,18 @@ impl GIC
         if (self.gich.gich_misr.bits_set(GICH_INT_NP))
         {
             self.gich.gich_hcr &= !GICH_INT_NP;
-            //println!("a {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
+            println!("no pending {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
             //GICH_HCR |= GICH_INT_U;
         }
         else if (self.gich.gich_misr.bits_set(GICH_INT_U))
         {
-            //println!("b {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
+            println!("underflow {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
 
             self.gich.gich_hcr &= !GICH_INT_U;
         }
         else if (self.gich.gich_misr.bits_set(GICH_INT_EOI)) // EOI
         {
-            //println!("eoi {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
+            println!("eoi {:08x} {:x} {:08x} {:08x}", self.gich.gich_hcr.r32(), self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
         }
 
         self.process_queue();
@@ -599,8 +588,6 @@ impl GIC
     
     pub fn send_interrupt(&mut self, int_id: u16, vcpu: u8, prio: u8)
     {
-        let mut lr_slot = self.find_lr_slot();
-        
         //println!("(core {}) Sending int_id {} to vcpu {}, prio {}", get_core(), int_id, vcpu, prio);
 
         let mut lr_val = 0;
@@ -616,6 +603,7 @@ impl GIC
             lr_val |= (LR_STS_PENDING << LR_STS_SHIFT);
             lr_val |= ((vcpu as u32) << LR_SHIFT_VCPU);
             lr_val |= ((int_id as u32) << LR_SHIFT_VIRQ);
+            lr_val |= bit!(19);
         }
 
         // make sure we're not sending a request that is already pending
@@ -631,13 +619,11 @@ impl GIC
             let lrval_prio = (lr_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
             if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == vcpu && (lr_state == LR_STS_PENDING))
             {
-                lr_slot = LR_INVALID_SLOT;
                 println!("Tried to queue SGI {:x} to core {} while pending", int_id, vcpu);
                 return; // don't queue another interrupt if there's one pending
             }
             else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id && (lr_state != LR_STS_INVALID))
             {
-                lr_slot = LR_INVALID_SLOT;
                 println!("Tried to queue {:x} while pending", int_id);
                 return; // don't queue another interrupt if there's one pending
             }
@@ -648,8 +634,35 @@ impl GIC
                 return; // don't queue another interrupt if there's one pending
             }*/
         }
+        
+        unsafe
+        {
+        let queue_iter = CPU_LR_QUEUES[get_core() as usize].as_ref().unwrap().iter();
+        for _lr_iter_val in queue_iter
+        {
+            let lr_iter_val = _lr_iter_val;
+            let lr_state = (lr_iter_val >> 28) & 3;
+            let lr_vid = (lr_iter_val & 0x3FF) as u16;
+            let lr_cpu = ((lr_iter_val >> 10) & 3) as u8;
+            let lr_prio = (lr_iter_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
 
-        self.cpu_lr_queue_push(lr_val);
+
+            let lrval_prio = (lr_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
+            if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == vcpu && (lr_state == LR_STS_PENDING))
+            {
+                println!("Tried to queue SGI {:x} to core {} while pending", int_id, vcpu);
+                return; // don't queue another interrupt if there's one pending
+            }
+            else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id && (lr_state != LR_STS_INVALID))
+            {
+                println!("Tried to queue {:x} while pending", int_id);
+                return; // don't queue another interrupt if there's one pending
+            }
+        }
+
+        let queue = CPU_LR_QUEUES[get_core() as usize].as_mut().unwrap();
+        queue.push_back(lr_val);
+        }
     }
     
     pub fn get_gich_misr(&mut self) -> u32

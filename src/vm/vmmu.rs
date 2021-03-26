@@ -110,7 +110,7 @@ pub fn vttbr_new_lv3_pagetable(start_addr: u64) -> u64
             if (target_addr >= 0x80000000 && target_addr < 0x200000000) {
                 page_ent[i] = page_ent_val;
             }
-            /*else if (target_addr >= 0x50044000 && target_addr < 0x50046000)
+            else if (target_addr >= 0x50044000 && target_addr < 0x50046000)
             {
                 page_ent[i] = 0;
                 test = 1;
@@ -122,7 +122,7 @@ pub fn vttbr_new_lv3_pagetable(start_addr: u64) -> u64
             else if (target_addr >= 0x50042000 && target_addr < 0x50044000)
             {
                 page_ent[i] = page_ent_val + 0x4000; //GICC
-            }*/
+            }
             /*else if (target_addr >= 0x700b0000 && target_addr < 0x700c0000)
             {
                 poke64(page_ent+arr_offs, 0);

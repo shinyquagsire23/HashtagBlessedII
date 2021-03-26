@@ -255,7 +255,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
         if (tegra_irq_is_sgi(iar_int_id))
         {
             gic.set_eoir(iar);
-            gic.set_dir(iar);
+            //gic.set_dir(iar);
         }
         else
         {
