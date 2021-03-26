@@ -19,6 +19,28 @@ extern "C"
     static __text_start: u32;
 }
 
+static mut LAST_RAND: u32 = 0;
+
+fn rand_gen() -> u16
+{
+    unsafe
+    {
+        let next = (1103515245 * LAST_RAND) + 12345;
+        LAST_RAND = next;
+        return ((next >> 16) & 0xffff) as u16;
+    }
+}
+
+fn rand_gen_32() -> u32
+{
+    return (rand_gen() as u32) << 16 | (rand_gen() as u32);
+}
+
+fn rand_gen_64() -> u64
+{
+    return (rand_gen_32() as u64) << 32 | (rand_gen_32() as u64);
+}
+
 pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
 {
     let smc_which = iss & 0x1;
@@ -73,6 +95,24 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     else if (smc_cmd == SMC0_GENAESKEK || smc_cmd == SMC0_COMPUTEAES || smc_cmd == SMC0_COMPUTECMAC || smc_cmd == SMC0_GETCONFIG/* || smc_cmd == SMC_GENRANDOMBYTES || smc_cmd == SMC_GETCONFIG*/)
     {
         silence_print = true;
+    }
+    
+    if (smc_cmd == SMC_GENRANDOMBYTES)
+    {
+        let mut i = smc_arg0;
+        let mut j = 1;
+        
+        if i > 0x38 {
+            i = 0x38;
+        }
+        while i > 0
+        {
+            ctx[j] = rand_gen_64();
+            j += 1;
+            i -= 8;
+        }
+        ctx[0] = 0;
+        return retaddr;
     }
 
     if (!silence_print)

@@ -129,6 +129,8 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
 
     gic.set_gich_vmcr();
 
+    let mut show_irqs = false;
+
     //TODO
     if (int_id == 0x1e)
     {
@@ -146,7 +148,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
         {
         let mut tmp: u64 = 0;
 
-        tmp = 0x80000;
+        tmp = 0x10000;
         asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
         tmp = 0x1;
         asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
@@ -161,10 +163,12 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
             {
                 asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) tmp);
                 println!("lockup {:x}", get_elr_el2());
+                
                 /*tmp = 100;
-                asm volatile ("msr CNTP_TVAL_EL0, %0" : "=r" (tmp));
-                tmp = 0x1;
-                asm volatile ("msr CNTP_CTL_EL0, %0" : "=r" (tmp));
+                asm!("msr CNTP_CVAL_EL0, {0}", in(reg) tmp);
+                tmp = 1;
+                asm!("msr CNTP_CTL_EL0, {0}", in(reg) tmp);*/
+                /*
                 gic_enable_interrupt(0x1e, get_core());
                 GICC_EOIR = 0x1e;
                 GICC_DIR = 0x1e;
@@ -222,11 +226,14 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     }
     else if (iar_int_id != 0x3FF)
     {
+        /*if (iar_int_id == 0x1e) {
+            show_irqs = true;
+        }*/
+
         gic.send_interrupt(iar_int_id, iar_vcpu, rpr);
         gic.process_queue();
     }
 
-    let show_irqs = false;
     if (show_irqs) 
     {
         println!("IRQ core {} (misr {:x} rpr {:x} id {:x}, vcpu {}, IAR {:04x}->{:04x} LR[0] {:08x} ELSR0 {:08x} hppir {:04x}->{:04x}, vrpr {:02x}->{:02x}) ret {:016x}",
@@ -240,7 +247,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     }
 
     // TODO was this correct...?
-    if (iar != IRQ_INVALID as u32)
+    if (iar_int_id != IRQ_INVALID)
     {
         // software interrupts can be fully signalled
         if (tegra_irq_is_sgi(int_id))

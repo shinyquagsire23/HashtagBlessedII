@@ -43,11 +43,11 @@ impl SvcHandler for SvcDefaultHandler
         // Pre-SVC call
         //println!("Pre-SVC call");
         
-        let post_ctx = SvcWait::new(pre_ctx).await;
+        //let post_ctx = SvcWait::new(pre_ctx).await;
         
         // Post-SVC call
         //println!("Post-SVC call");
-        return post_ctx;
+        return pre_ctx;
     }
 }
 
@@ -64,28 +64,6 @@ pub fn vsvc_init()
         RUNNING_PROCESS_NAME.insert(6, String::from("spl"));
         RUNNING_PROCESS_NAME.insert(7, String::from("boot"));
         RUNNING_PROCESS_NAME.insert(0xFF, String::from("idle core"));
-    }
-    
-    let test_ctx: [u64; 32] = [0; 32];
-    _svc_gen_pre(0x1f, 0, test_ctx);
-    
-    if let Some(ret_ctx) = task_advance_svc_ctx(0) {
-        println!("Returned early from pre! {:016x}", ret_ctx[0]);
-    }
-    else
-    {
-        println!("Pre waiting for SVC");
-    }
-    
-    let test_post_ctx: [u64; 32] = [0x12345678ABCDEF; 32];
-    SvcWait::populate_ctx(test_post_ctx);
-    
-    if let Some(ret_ctx) = task_advance_svc_ctx(0) {
-        println!("Returned post! {:016x}", ret_ctx[0]);
-    }
-    else
-    {
-        println!("No post");
     }
 }
 
@@ -123,7 +101,7 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
     let svc = HorizonSvc::from_iss(iss);
     let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
     
-    let timeout_stretch = 2;
+    let timeout_stretch = 1;
     match svc {
         HorizonSvc::WaitSynchronization(_) => {
             ctx[3] *= timeout_stretch; // timeout
@@ -173,6 +151,11 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
 pub fn vsvc_post_handle(iss: u32, ctx: &mut [u64]) -> u64
 {
     let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
+    
+    let errcode = ctx[0] & 0xFFFFFFFF;
+    if (errcode != 0 && errcode != 0xea01 && errcode != 0xec01 && errcode != 0xf601 && (iss & 0xFF) != 0x7F && (iss & 0xFF) != 0x7) {
+        //println!("(core {}) SVC return 0x{:02x} -> {:08x}, pid {:02x} ({})", get_core(), iss & 0xFF, errcode, vsvc_get_curpid(), vsvc_get_curpid_name());
+    }
     
     let mut post_ctx: [u64; 32] = Default::default();
     post_ctx.copy_from_slice(&ctx[..32]);

@@ -82,9 +82,9 @@ const KERN_DATA: &[u8] = include_bytes!("../data/0_kernel_80060000.bin");
 static ALLOCATOR: HtbHeap = HtbHeap::empty();
 
 #[repr(align(0x1000))]
-struct PageAlignedHeapAlloc([u8; 0x100000]);
+struct PageAlignedHeapAlloc([u8; 0x400000]);
 
-static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x100000]);
+static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x400000]);
 
 #[no_mangle]
 pub extern "C" fn main_warm() 
@@ -125,7 +125,7 @@ pub extern "C" fn main_cold()
 {
     fpu_enable();
     
-    unsafe { ALLOCATOR.init((HEAP_RES.0.as_ptr() as *const u8) as usize, 0x100000); }
+    unsafe { ALLOCATOR.init((HEAP_RES.0.as_ptr() as *const u8) as usize, 0x400000); }
     
     let mut uart_a: UARTDevice = UARTDevice::new(UartA);
     uart_a.init(115200);
@@ -202,14 +202,14 @@ pub extern "C" fn main_cold()
             println!("Hooking addr {:016x}", search);
             if (peek32(search + 4) == 0xd63f0160) // A64
             {
-                //poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
-                //poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
+                poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
+                poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
                 a64_hooked = true;
             }
             else if (peek32(search + 4) == 0xd63f0260) // A32
             {
-                //poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
-                //poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
+                poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
+                poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
                 a32_hooked = true;
             }
         }

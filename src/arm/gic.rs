@@ -638,7 +638,9 @@ impl GIC
             }
             else if (lr_vid == int_id && (lr_state == LR_STS_PENDING))
             {
-                return; // don't queue another interrupt if there's one pending
+                if (int_id != 0x1E) {
+                    return; // don't queue another interrupt if there's one pending
+                }
             }
         }
 
