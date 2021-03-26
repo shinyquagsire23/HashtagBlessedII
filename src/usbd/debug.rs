@@ -203,6 +203,7 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
     
     // Send our data
     log_raw(&to_send.as_slice());
+    log_try_flush(get_core(), true);
     }
 }
 

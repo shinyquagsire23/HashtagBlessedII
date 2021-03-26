@@ -295,7 +295,7 @@ impl GICHRegs
     
     pub fn init(&mut self)
     {
-        self.gich_hcr |= bit!(0);
+        //self.gich_hcr |= bit!(0);
         self.gich_vmcr |= bit!(0);// | BIT(9);// | BIT(9);// | BIT(9);
     }
 }
@@ -387,6 +387,11 @@ impl GIC
     pub fn enable_interrupt(&mut self, num: u16, core: u8)
     {
         self.gicd.enable_interrupt(num, core);
+    }
+    
+    pub fn disable_interrupt(&mut self, num: u16, core: u8)
+    {
+        self.gicd.disable_interrupt(num, core);
     }
     
     pub fn get_int_id(&mut self) -> u16

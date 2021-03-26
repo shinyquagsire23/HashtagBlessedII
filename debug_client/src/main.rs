@@ -18,9 +18,21 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag;
 use ncurses::*;
+use binread::{BinRead, io::Cursor};
 
 const VID_NINTENDO: u16 = 0x057e;
 const PID_SWITCH: u16 = 0x2000;
+
+static mut POLL_LOG: bool = false;
+
+#[derive(BinRead)]
+#[br(magic = b"\x01")]
+struct UsbCmdPacket {
+    pkt_len: u32,
+
+    #[br(little, count = pkt_len)]
+    data: Vec<u8>,
+}
 
 #[macro_use]
 macro_rules! println {
@@ -125,9 +137,21 @@ fn process_input(input_buf: &[u8; 64], n: usize)
 {
     if input_buf[0] == 1 {
         print!("Received cmd stream... ");
-        for i in 1..n
+        
+        let mut reader = Cursor::new(input_buf.clone());
+        let pkt: UsbCmdPacket = UsbCmdPacket::read(&mut reader).unwrap();
+        
+        if pkt.pkt_len >= 1 {
+            if pkt.data[0] == 0xFF
+            {
+                unsafe { POLL_LOG = true; }
+                thread::sleep(time::Duration::from_millis(2000));
+            }
+        }
+        
+        for i in 0..pkt.pkt_len
         {
-            print!("{:02x} ", input_buf[i]);
+            print!("{:02x} ", pkt.data[i as usize]);
         }
         println!("");
     }
@@ -157,7 +181,6 @@ fn process_input(input_buf: &[u8; 64], n: usize)
 fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u8, ep_out_num: u8) -> bool
 {
     let mut input_buf: [u8; 64] = [0; 64];
-    //let mut out_buf: [u8; 64] = [0; 64];
     
     match handle.read_bulk(ep_in_num, &mut input_buf, time::Duration::from_millis(1)) {
         Err(e) => {
@@ -174,10 +197,24 @@ fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u
             }
         },
     };
-    
+
     let ch = getch();
     let try_chr = char::from_u32(ch as u32);
     if !try_chr.is_some() {
+        unsafe
+        {
+            if POLL_LOG {
+            let out_buf: [u8; 5] = [0; 5];
+            match handle.write_bulk(ep_out_num, &out_buf, time::Duration::from_millis(10)) {
+                Err(_e) => {
+                    //println!("write err 2 {}", _e);
+                },
+                Ok(_n) => {
+                    //println!("Sent {} bytes", n);
+                },
+            };
+            }
+        }
         return true;
     }
     let ch_str = &format!("{}", try_chr.unwrap());
@@ -214,6 +251,7 @@ fn main() -> Result<(), Error>
     println!("Searching for device...");
     while !term_now.load(Ordering::Relaxed)
     {
+        unsafe { POLL_LOG = false; }
         let handle_try = find_device();
         if !handle_try.is_some() {
             thread::sleep(time::Duration::from_millis(100));

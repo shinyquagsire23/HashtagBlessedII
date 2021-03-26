@@ -22,6 +22,7 @@ use crate::arm::threading::*;
 
 static LOGGER_MUTEX: [spin::Mutex<()>; 8] = [spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(())];
 
+static mut LOGGER_DATA_COMB: spin::Mutex<Option<VecDeque<u8>>> = spin::Mutex::new(None);
 static mut LOGGER_DATA: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
 static mut LOGGER_CMD: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
 
@@ -78,6 +79,7 @@ pub fn logger_init()
 {
     unsafe
     {
+        LOGGER_DATA_COMB = spin::Mutex::new(Some(VecDeque::new()));
         for i in 0..8
         {
             LOGGER_DATA[i] = Some(VecDeque::new());
@@ -146,72 +148,31 @@ pub fn log_process()
         // TODO per-core mutex?
         // TODO timestamps?
         
-        let mut logger_data_copy: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
+        let mut logger_data_copy: Option<VecDeque<u8>> = None;
         let mut logger_cmd_copy: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
         
         {
+            logger_data_copy = Some(LOGGER_DATA_COMB.lock().as_mut().unwrap().split_off(0));
             for core_iter in 0..8
             {
                 let lock = LOGGER_MUTEX[core_iter].lock();
-                
-                let mut logger_data = LOGGER_DATA[core_iter].as_mut().unwrap();
+
                 let mut logger_cmd = LOGGER_CMD[core_iter].as_mut().unwrap();
 
-                logger_data_copy[core_iter] = Some(logger_data.split_off(0));
                 logger_cmd_copy[core_iter] = Some(logger_cmd.split_off(0));
             }
         }
         
-        loop
+        // Main log
+        let mut logger_data = logger_data_copy.as_mut().unwrap();
+        
+        if (!logger_data.is_empty())
         {
-            for core_iter in 0..8
-            {
-                let mut logger_data = logger_data_copy[core_iter].as_mut().unwrap();
-                
-                if (logger_data.is_empty())
-                {
-                    continue;
-                }
 
-                
-                let data = logger_data.make_contiguous();
-
-                let mut next_line = data.len();
-                for i in 0..data.len()
-                {
-                    if data[i] == '\n' as u8 {
-                        next_line = i+1;
-                        break;
-                    }
-                }
-                
-                log_uarta_raw(&data[0..next_line]);
-                log_usb_raw(&data[0..next_line]);
-                
-                let data_len = data.len();
-                drop(data);
-                
-                if next_line >= data_len {
-                    logger_data.clear();
-                }
-                else {
-                    let mut i = 0;
-                    logger_data.retain(|_| (i >= next_line, i += 1).0);
-                }
-            }
+            let data = logger_data.make_contiguous();
             
-            let mut is_done = true;
-            for core_iter in 0..8
-            {
-                let mut logger_data = logger_data_copy[core_iter].as_mut().unwrap();
-                
-                if (!logger_data.is_empty())
-                {
-                    is_done = false;
-                }
-            }
-            
-            if is_done { break; }
+            log_uarta_raw(data);
+            log_usb_raw(data);
         }
         
         // USB side-channel data
@@ -249,6 +210,73 @@ pub fn log_process()
     }
 }
 
+pub fn log_try_flush(core: u8, flush_remainder: bool)
+{
+    unsafe
+    {
+        let irq_lock = critical_start();
+        let lock = LOGGER_MUTEX[core as usize].lock();
+
+        let mut logger_data = LOGGER_DATA[core as usize].as_mut().unwrap();
+        
+        let mut i = 0;
+        loop
+        {
+            if i >= logger_data.len() { break; }
+            
+            // Handle any blinking/spinning/etc
+            if logger_data[i] == '\r' as u8 {
+            
+                let mut to_split = i+1;
+                if i < logger_data.len()-1 && logger_data[i+1] == '\n' as u8 {
+                    to_split += 1
+                }
+                // Attempt to lock, if busy just handle later.
+                let mut lock_comb = LOGGER_DATA_COMB.try_lock();
+                if let Some(mut comb) = lock_comb {
+                    let mut split_remainder = logger_data.split_off(to_split);
+                    comb.as_mut().unwrap().append(&mut logger_data);
+                    *logger_data = split_remainder;
+                }
+                
+                i = 0;
+                continue;
+            }
+            // Otherwise, find newline to flush data to
+            else if logger_data[i] == '\n' as u8 {
+            
+                // Attempt to lock, if busy just handle later.
+                let mut lock_comb = LOGGER_DATA_COMB.try_lock();
+                if let Some(mut comb) = lock_comb {
+                    let mut split_remainder = logger_data.split_off(i+1);
+                    comb.as_mut().unwrap().append(&mut logger_data);
+                    *logger_data = split_remainder;
+                }
+                
+                i = 0;
+                continue;
+            }
+            
+            i += 1;
+        }
+        
+        if flush_remainder {
+            let mut split = logger_data.split_off(0);
+            LOGGER_DATA_COMB.lock().as_mut().unwrap().append(&mut split);
+        }
+        
+        critical_end(irq_lock);
+    }
+}
+
+pub fn log_try_flush_all()
+{
+    for i in 0..8
+    {
+        log_try_flush(i, false);
+    }
+}
+
 pub fn log(data: &str)
 {
     log_raw(data.as_bytes());
@@ -260,15 +288,17 @@ pub fn log_raw(data: &[u8])
     {
         let irq_lock = critical_start();
         
-        let lock = LOGGER_MUTEX[get_core() as usize].lock();
-
-        let mut logger_data = LOGGER_DATA[get_core() as usize].as_mut().unwrap();
-        
-        for byte in data
         {
-            logger_data.push_back(*byte);
+            let lock = LOGGER_MUTEX[get_core() as usize].lock();
+            let mut logger_data = LOGGER_DATA[get_core() as usize].as_mut().unwrap();
+            
+            for byte in data
+            {
+                logger_data.push_back(*byte);
+            }
         }
-        
+        log_try_flush(get_core(), false);
+
         critical_end(irq_lock);
     }
 }

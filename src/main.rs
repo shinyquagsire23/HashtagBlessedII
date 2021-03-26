@@ -221,6 +221,8 @@ pub extern "C" fn main_cold()
         search += 4;
     }
     
+    poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x280, 0xd4000002); // EL1 IRQ
+    poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x480, 0xd4000002); // EL0 IRQ
     
     //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x584, 0xd4000002); // lowerel serror
     //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x784, 0xd4000002); // lowerel serror

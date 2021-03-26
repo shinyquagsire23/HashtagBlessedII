@@ -7,6 +7,7 @@
 use crate::arm::threading::*;
 use crate::arm::exceptions::*;
 use crate::arm::cache::*;
+use crate::arm::gic::*;
 use crate::vm::vsysreg::*;
 use crate::vm::vsvc::*;
 use crate::vm::vmmio::*;
@@ -19,6 +20,7 @@ use alloc::string::String;
 use crate::vm::funcs::*;
 use crate::task::*;
 use crate::usbd::usbd::*;
+use crate::vm::virq::*;
 
 pub const EC_WFIWFE:        u8 = (0x01);
 pub const EC_ASIMD:         u8 = (0x07);
@@ -441,7 +443,12 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         ec = (esr_el1 >> 26) as u8;
         iss = esr_el1 & 0x1FFFFFF;
 
-        if (hvc_num == 1)
+        if (hvc_num == 0)
+        {
+            //println!("(core {}) ec {:x} {:016x}", get_core(), ec, elr_el2);
+            return virq_handle_fake(ctx);
+        }
+        else if (hvc_num == 1)
         {
             // emulate ff 42 03 d5     msr        DAIFClr,#0x2
             ctx[38] &= !0x80;
@@ -590,14 +597,6 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         }
         
         
-        }
-        
-        for i in 0..32
-        {
-            if (ctx[i] == 0x600040ac600040a4)
-            {
-                println!("aaaaa {:016x} {:016x}", ret_addr, ctx[31]);
-            }
         }
         
         //disable_single_step();

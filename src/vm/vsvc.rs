@@ -16,12 +16,14 @@ use alloc::sync::Arc;
 use crate::task::*;
 use crate::task::svc_wait::*;
 use crate::task::svc_executor::*;
+use crate::logger::log_cmd;
 
 use alloc::boxed::Box;
 use async_trait::async_trait;
 
 static mut LAST_CREATED: [Option<String>; 8] = [None, None, None, None, None, None, None, None];
 static mut RUNNING_PROCESS_NAME: BTreeMap<u32, String> = BTreeMap::new();
+static mut VSVC_QLAUNCH_STARTED: bool = false;
 
 include!(concat!(env!("OUT_DIR"), "/vsvc_gen.rs"));
 
@@ -49,6 +51,11 @@ impl SvcHandler for SvcDefaultHandler
         //println!("Post-SVC call");
         return pre_ctx;
     }
+}
+
+pub fn vsvc_is_qlaunch_started() -> bool
+{
+    unsafe { return VSVC_QLAUNCH_STARTED; }
 }
 
 pub fn vsvc_init()
@@ -201,6 +208,17 @@ impl SvcHandler for SvcConnectToNamedPort
 }
 
 #[async_trait]
+impl SvcHandler for SvcBreak
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        println!("(core {}) process `{}` (pid {}) called svcBreak!", get_core(), vsvc_get_curpid_name(), vsvc_get_curpid());
+
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
 impl SvcHandler for SvcCreateProcess
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
@@ -211,6 +229,11 @@ impl SvcHandler for SvcCreateProcess
         unsafe
         {
             LAST_CREATED[get_core() as usize] = Some(String::from(proc_name));
+            
+            if (proc_name == "overlayDisp") {
+                VSVC_QLAUNCH_STARTED = true;
+                log_cmd(&[1, 1, 0, 0, 0, 0xFF]);
+            }
         }
         return pre_ctx;
     }
