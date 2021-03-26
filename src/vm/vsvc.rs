@@ -98,10 +98,10 @@ pub fn vsvc_get_curpid_name() -> String
 
 pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
 {
-    let svc = HorizonSvc::from_iss(iss);
+    //let svc = HorizonSvc::from_iss(iss);
     let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
     
-    let timeout_stretch = 1;
+    /*let timeout_stretch = 1;
     match svc {
         HorizonSvc::WaitSynchronization(_) => {
             ctx[3] *= timeout_stretch; // timeout
@@ -119,11 +119,13 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
             ctx[6] *= timeout_stretch; // timeout
         },
         _ => {}
-    }
+    }*/
     
     let mut pre_ctx: [u64; 32] = Default::default();
     pre_ctx.copy_from_slice(&ctx[..32]);
-    _svc_gen_pre(iss, thread_ctx, pre_ctx);
+    if _svc_gen_pre(iss, thread_ctx, pre_ctx) {
+        return get_elr_el2();
+    }
     
     // SVC handler returned early
     if let Some(ret_ctx) = task_advance_svc_ctx(thread_ctx) {
@@ -182,8 +184,8 @@ impl SvcHandler for SvcConnectToNamedPort
     {
         let port_name = str_from_null_terminated_utf8_u64ptr_unchecked(translate_el1_stage12(pre_ctx[1]));
 
-        //println!("(core {}) svcConnectToNamedPort from `{}` for port {}", 
-        //         get_core(), vsvc_get_curpid_name(), port_name);
+        println!("(core {}) svcConnectToNamedPort from `{}` for port {}", 
+                 get_core(), vsvc_get_curpid_name(), port_name);
         let port_name_str = String::from(port_name);
         
         //
@@ -205,7 +207,7 @@ impl SvcHandler for SvcCreateProcess
     {
         let proc_name = str_from_null_terminated_utf8_u64ptr_unchecked(translate_el1_stage12(pre_ctx[1]));
 
-        //println!("(core {}) svcCreateProcess -> {}", get_core(), proc_name);
+        println!("(core {}) svcCreateProcess -> {}", get_core(), proc_name);
         unsafe
         {
             LAST_CREATED[get_core() as usize] = Some(String::from(proc_name));

@@ -133,7 +133,7 @@ pub fn vsysreg_handle(iss: u32, ctx: &mut [u64]) -> u64
 	        asm!("mrs {0}, VBAR_EL1", out(reg) val_vbar);
 	        //printf("(core %u) VBAR_EL1 %016llx\n\r", get_core(), val_vbar);
 
-            if (!HAS_HOOKED_EXCEPTIONS && val_vbar != 0)
+            /*if (!HAS_HOOKED_EXCEPTIONS && val_vbar != 0)
             {
                 let vbar_ptr = translate_el1_stage12(val_vbar);
 
@@ -145,7 +145,7 @@ pub fn vsysreg_handle(iss: u32, ctx: &mut [u64]) -> u64
                 poke32(vbar_ptr + 0x400, 0xd4000002 | (0 << 5)); // HVC #0 instruction
 
                 HAS_HOOKED_EXCEPTIONS = true;
-            }
+            }*/
         }
         else if (opc1 == 3 && crn == 14 && crm == 2 && opc2 == 1)
         {
@@ -162,10 +162,11 @@ pub fn vsysreg_handle(iss: u32, ctx: &mut [u64]) -> u64
             {
                 let diff = vsysreg_getticks_unscaled(cur_ticks_scaled) - vsysreg_getticks_unscaled(val_vm);
                 vsysreg_addoffset(diff);
-                let val: u64 = 10;
-                asm!("msr CNTP_TVAL_EL0, {0}", in(reg) val);
+                //let val: u64 = 10;
+                //asm!("msr CNTP_TVAL_EL0, {0}", in(reg) val);
 
-                //asm!("msr CNTP_CVAL_EL0, {0}", in(reg) val);
+                let val = vsysreg_getticks_unscaled(val_vm);
+                asm!("msr CNTP_CVAL_EL0, {0}", in(reg) val);
             }
             else
             {

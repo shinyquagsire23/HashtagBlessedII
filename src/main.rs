@@ -93,7 +93,9 @@ pub extern "C" fn main_warm()
     //dcache_invalidate(0xD0000000, 0x3000000);
     println!("Hello from core {}! {:016x}", get_core(), vsysreg_getticks());
 
+    let lock = critical_start();
     vttbr_transfer_newcore();
+    critical_end(lock);
     
     let mut gic: GIC = GIC::new();
     gic.init();
@@ -229,7 +231,9 @@ pub extern "C" fn main_cold()
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     println!("Done copy...");
+    let lock = critical_start();
     vttbr_construct();
+    critical_end(lock);
     
     println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
     println!("Dropping to EL1");

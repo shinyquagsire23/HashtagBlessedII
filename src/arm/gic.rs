@@ -294,7 +294,7 @@ impl GICHRegs
     
     pub fn init(&mut self)
     {
-        self.gich_hcr |= bit!(0);
+        //self.gich_hcr |= bit!(0);
         self.gich_vmcr |= bit!(0);// | BIT(9);// | BIT(9);// | BIT(9);
     }
 }
@@ -499,8 +499,8 @@ impl GIC
         {
             if ((virq_status & bit!(i)) != 0)
             {
-                //let hwint_id = (self.gich.gich_lr.idx32(i).r32() & LR_IRQ_MASK);
-                //println!("Cleared {:x}", hwint_id);
+                let hwint_id = (self.gich.gich_lr.idx32(i).r32() & LR_IRQ_MASK);
+                println!("Cleared {:x}", hwint_id);
                 self.gich.gich_lr.idx32(i).w32(0);
             }
         }
@@ -523,24 +523,25 @@ impl GIC
                 let lrval_prio = (lr_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
                 let lrval_cpu = (lr_val >> 10) & 3;
                 let int_id = (lr_val & 0x3FF) as u16;
-                if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == lrval_cpu)
+                if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == lrval_cpu && (lr_state == LR_STS_PENDING))
                 {
-                    //lr_slot = LR_INVALID_SLOT;
+                    lr_slot = LR_INVALID_SLOT;
                     //self.cpu_lr_queue_push(lr_val);
-                    //break;
+                    break;
                 }
-                else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id)
+                else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id && (lr_state != LR_STS_INVALID))
                 {
-                    //lr_slot = LR_INVALID_SLOT;
+                    println!("Didn't push IRQ {}!", int_id);
+                    lr_slot = LR_INVALID_SLOT;
                     //self.cpu_lr_queue_push(lr_val);
-                    //break;
+                    break;
                 }
 
-                if (lr_vid == int_id && (lr_state == LR_STS_PENDING))
+                /*if (lr_vid == int_id && (lr_state != LR_STS_INVALID))
                 {
                     lr_slot = LR_INVALID_SLOT; // don't queue another interrupt if there's one pending
                     break;
-                }
+                }*/
             }
 
             if (lr_slot >= 4) { continue; }
@@ -579,18 +580,18 @@ impl GIC
         if (self.gich.gich_misr.bits_set(GICH_INT_NP))
         {
             self.gich.gich_hcr &= !GICH_INT_NP;
-            //println!("a {:x} {:08x} {:08x}", GICH_EISR0, GICH_LR[0], GICH_LR[1]);
+            //println!("a {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
             //GICH_HCR |= GICH_INT_U;
         }
         else if (self.gich.gich_misr.bits_set(GICH_INT_U))
         {
-            //println!("b {:x} {:08x} {:08x}", GICH_EISR0, GICH_LR[0], GICH_LR[1]);
+            //println!("b {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
 
             self.gich.gich_hcr &= !GICH_INT_U;
         }
         else if (self.gich.gich_misr.bits_set(GICH_INT_EOI)) // EOI
         {
-
+            //println!("eoi {:x} {:08x} {:08x}", self.gich.gich_eisr0.r32(), self.gich.gich_lr.idx32(0).r32(), self.gich.gich_lr.idx32(1).r32());
         }
 
         self.process_queue();
@@ -628,20 +629,24 @@ impl GIC
 
 
             let lrval_prio = (lr_val >> LR_PRIO_SHIFT) & LR_PRIO_MASK;
-            if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == vcpu)
+            if (tegra_irq_is_sgi(int_id) && lr_vid == int_id && lr_cpu == vcpu && (lr_state == LR_STS_PENDING))
             {
                 lr_slot = LR_INVALID_SLOT;
+                println!("Tried to queue SGI {:x} to core {} while pending", int_id, vcpu);
+                return; // don't queue another interrupt if there's one pending
             }
-            else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id)
+            else if (!tegra_irq_is_sgi(int_id) && lr_vid == int_id && (lr_state != LR_STS_INVALID))
             {
                 lr_slot = LR_INVALID_SLOT;
+                println!("Tried to queue {:x} while pending", int_id);
+                return; // don't queue another interrupt if there's one pending
             }
-            else if (lr_vid == int_id && (lr_state == LR_STS_PENDING))
+            
+            /*else if (lr_vid == int_id )
             {
-                if (int_id != 0x1E) {
-                    return; // don't queue another interrupt if there's one pending
-                }
-            }
+                println!("Tried to queue {:x} while pending", int_id);
+                return; // don't queue another interrupt if there's one pending
+            }*/
         }
 
         self.cpu_lr_queue_push(lr_val);

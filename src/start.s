@@ -273,8 +273,8 @@ _do_except:
     cmp x0, #0x0
     beq t210_reset
     
-    msr daifclr, #0b0001
-    isb
+    //msr daifclr, #0b0010
+    //isb
     
     nop
     nop
@@ -327,6 +327,12 @@ irq_print:
     stp x26, x27, [sp, #0xD0]
     str x28, [sp, #0xE0]
     str x30, [sp, #0xF0]
+    
+    mrs	x21, spsr_el2
+    mrs	x22, elr_el2
+    stp	x21, x22, [sp, #0x130] // 38,39
+    mrs	x22, esr_el2
+    str x22, [sp, #0x140] // 40
 
     mrs x0, spsr_el2
     and x0, x0, 0xC
@@ -408,30 +414,19 @@ irq__do_except:
     
     cmp x0, #0x0
     beq t210_reset
+    
+    //msr daifclr, #0b0010
+    //isb
+    
+    nop
+    nop
 
     msr elr_el2, x0
     
-    sub x1, sp, #0x10
-	sub x0, sp, #0x8000
-	ldr x2, =0x42424242
-	ldr x3, =0x43434343
-_stack_clear_loop:
-    stp x2, x3, [x0, #0x0]
-    add x0, x0, #0x10
-    cmp x0, x1
-    ble _stack_clear_loop
+    ldp	x21, x22, [sp, #0x130] // 38,39
+    msr	spsr_el2, x21
+    //msr	elr_el2, x22
 
-    //mrs x0, hcr_el2
-    //orr x0, x0, #(1<<7)
-    //msr hcr_el2, x0
-
-#if 0
-    ldr	x0, [sp, #0x1F0]
-    msr	fpsr, x0
-
-    ldr	x0, [sp, #0x1F8]
-    msr	fpcr, x0
-#endif
     ldp x0, x1, [sp, #0x0]
     ldp x2, x3, [sp, #0x10]
     ldp x4, x5, [sp, #0x20]
@@ -457,86 +452,118 @@ _stack_clear_loop:
 vector_table_el2:
 curr_el_sp0_sync:        // The exception handler for a synchronous 
                          // exception from the current EL using SP0.
+clrex
+nop
 b exception_print
 
 .balign 0x80
 curr_el_sp0_irq:         // The exception handler for an IRQ exception
                          // from the current EL using SP0.
+clrex
+nop
 b irq_print
 
 .balign 0x80
 curr_el_sp0_fiq:         // The exception handler for an FIQ exception
                          // from the current EL using SP0.
+clrex
+nop
 b irq_print
 
 .balign 0x80
 curr_el_sp0_serror:      // The exception handler for a System Error 
                          // exception from the current EL using SP0.
+clrex
+nop
 b exception_print
 
 .balign 0x80
 curr_el_spx_sync:        // The exception handler for a synchrous 
                          // exception from the current EL using the
                          // current SP.
+clrex
+nop
 b exception_print
 
 
 .balign 0x80
 curr_el_spx_irq:         // The exception handler for an IRQ exception from 
                          // the current EL using the current SP.
+clrex
+nop
 b irq_print
 
 .balign 0x80
 curr_el_spx_fiq:         // The exception handler for an FIQ from 
                          // the current EL using the current SP.
+clrex
+nop
 b irq_print
 
 .balign 0x80
 curr_el_spx_serror:      // The exception handler for a System Error 
                          // exception from the current EL using the
                          // current SP.
+clrex
+nop
 b exception_print
 
  .balign 0x80
 lower_el_aarch64_sync:   // The exception handler for a synchronous 
                          // exception from a lower EL (AArch64).
+clrex
+nop
 b exception_print
 
 .balign 0x80
 lower_el_aarch64_irq:    // The exception handler for an IRQ from a lower EL
                          // (AArch64).
+clrex
+nop
 b irq_print
 
 .balign 0x80
 lower_el_aarch64_fiq:    // The exception handler for an FIQ from a lower EL
                          // (AArch64).
+clrex
+nop
 b irq_print
 
 .balign 0x80
 lower_el_aarch64_serror: // The exception handler for a System Error 
                          // exception from a lower EL(AArch64).
+clrex
+nop
 b exception_print
 
 .balign 0x80
 lower_el_aarch32_sync:   // The exception handler for a synchronous 
                          // exception from a lower EL(AArch32).
+clrex
+nop
 b exception_print
 
 
 .balign 0x80
 lower_el_aarch32_irq:    // The exception handler for an IRQ exception 
                          // from a lower EL (AArch32).
+clrex
+nop
 b irq_print
 
 
 .balign 0x80
 lower_el_aarch32_fiq:    // The exception handler for an FIQ exception from 
                          // a lower EL (AArch32).
+clrex
+nop
 b irq_print
                          
 .balign 0x80
 lower_el_aarch32_serror: // The exception handler for a System Error
                          // exception from a lower EL(AArch32).
+clrex
+nop
 b exception_print
 
 .pool

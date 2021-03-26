@@ -17,6 +17,8 @@ use crate::util::*;
 use crate::logger::*;
 use alloc::string::String;
 use crate::vm::funcs::*;
+use crate::task::*;
+use crate::usbd::usbd::*;
 
 pub const EC_WFIWFE:        u8 = (0x01);
 pub const EC_ASIMD:         u8 = (0x07);
@@ -429,11 +431,11 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
     let elr_el2 = ctx[39];
     let mut ret_addr: u64 = elr_el2 + 4;
-    /*if (get_core() == 3)
+    if (get_core() == 3)
     {
-        last_core_ret = ret_addr;
-        last_core_name = vsvc_get_curpid_name();
-    }*/
+        task_advance();
+        irq_usb();
+    }
 
     let start_ticks: u64 = vsysreg_getticks();
     let mut end_ticks: u64 = start_ticks;

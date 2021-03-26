@@ -50,7 +50,10 @@ pub const LR_SHIFT_VCPU:   u32 = (10);
 pub const LR_SHIFT_PIRQ:   u32 = (10);
 pub const LR_SHIFT_VIRQ:   u32 = (0);
 
+pub const LR_STS_INVALID: u32 = (0);
 pub const LR_STS_PENDING: u32 = (1);
+pub const LR_STS_ACTIVE:  u32 = (2);
+pub const LR_STS_PENDING_AND_ACTIVE: u32 = (1);
 
 pub const GICH_INT_NP:  u32 = (bit!(3)); // no pending LRs
 pub const GICH_INT_U:   u32 = (bit!(1)); // underflow
@@ -106,8 +109,8 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     let hppir = gic.gicc.gicc_hppir.r32();
     let rpr = gic.get_rpr();
     let vrpr = gic.get_vrpr();
-    let vcpu = gic.get_int_vcpu();
-    let int_id = gic.get_int_id();
+    let vcpu = ((hppir >> 10) & 0x7) as u8;//gic.get_int_vcpu();
+    let int_id = (hppir & 0x3FF) as u16;//gic.get_int_id();
 
     let iar = gic.get_iar();
     let iar_vcpu = ((iar >> 10) & 0x7) as u8;
@@ -132,12 +135,15 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     let mut show_irqs = false;
 
     //TODO
-    if (int_id == 0x1e)
+    if (iar_int_id == 0x1e)
     {
-        unsafe { LOCKUP[get_core() as usize] += 1; }
+        unsafe { LOCKUP[get_core() as usize] += 1; 
+        //let val: u64 = 3;
+        //asm!("msr CNTP_CTL_EL0, {0}", in(reg) val);
+        }
     }
 
-    if (int_id == 26) // timer
+    if (iar_int_id == 26) // timer
     {
         //TODO better place this?
         if (get_core() == 0) {
@@ -189,7 +195,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
 
         return get_elr_el2();
     }
-    else if (int_id == IRQ_EL2_GIC_MAINTENANCE)
+    else if (iar_int_id == IRQ_EL2_GIC_MAINTENANCE)
     {
         //TODO
         //println!("(core {}) maintenance misr {:08x} hcr {:08x} vmcr {:08x} eisr0 {:08x} eisr1 {:08x} elsr0 {:08x} elsr1 {:08x} gicv_ctlr {:08x} gicc_ctrl {:08x}", get_core(), gic.get_gich_misr(), gic.gich.gich_hcr.r32(), gic.gich.gich_vmcr.r32(), gic.gich.gich_eisr0.r32(), gic.gich.gich_eisr1.r32(), gic.gich.gich_elsr0.r32(), gic.gich.gich_elsr1.r32(), gic.gicv.gicv_ctlr.r32(), gic.gicc.gicc_ctlr.r32());
@@ -204,15 +210,11 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
         
         return get_elr_el2();
     }
-    else if (int_id == IRQ_T210_USB)
+    else if (iar_int_id == IRQ_T210_USB)
     {
-        //mutex_lock(&irq_usb_mutex);
-        cdc_disable();
         irq_usb();
-        cdc_enable();
-        //mutex_unlock(&irq_usb_mutex);
 
-        tegra_irq_ack(int_id as i32);
+        tegra_irq_ack(iar_int_id as i32);
 
         gic.set_eoir(iar);
         gic.set_dir(iar);
@@ -226,9 +228,9 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     }
     else if (iar_int_id != 0x3FF)
     {
-        /*if (iar_int_id == 0x1e) {
-            show_irqs = true;
-        }*/
+        if (iar_int_id == 0x1e) {
+            //show_irqs = true;
+        }
 
         gic.send_interrupt(iar_int_id, iar_vcpu, rpr);
         gic.process_queue();
@@ -250,7 +252,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     if (iar_int_id != IRQ_INVALID)
     {
         // software interrupts can be fully signalled
-        if (tegra_irq_is_sgi(int_id))
+        if (tegra_irq_is_sgi(iar_int_id))
         {
             gic.set_eoir(iar);
             gic.set_dir(iar);

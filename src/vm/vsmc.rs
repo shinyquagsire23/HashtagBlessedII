@@ -193,7 +193,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
         //println!("(core {}) SMC #{} Smc{} returned {:08x}", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0]);
     }
     
-/*    if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_PROGRAMVERIFY)
+    if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_PROGRAMVERIFY)
     {
         ctx[0] = 0;
         ctx[1] |= 1;//1;
@@ -228,7 +228,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     {
         ctx[0] = 0;
         ctx[1] = 2;
-    }*/
+    }
 
     return retaddr;
 }

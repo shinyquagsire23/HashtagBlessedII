@@ -96,10 +96,8 @@ SECTIONS
         
         . = ALIGN(4);    /* REQUIRED. LD is flaky without it. */
     } >ram = 0xff
-
-    . = ALIGN(0x1000);
     
-    .stack ALIGN(4) : {
+    .bss ALIGN(4) : {
         _stack = .; *(.stack)
         . = ALIGN(0x100);
         __stack_start = .;
@@ -107,11 +105,8 @@ SECTIONS
         __stack_end = .;
         LD_STACK_PTR = .;
         
-    } >ram = 0xff
-    
-    . = ALIGN(0x1000);
-    
-    .bss ALIGN(4) : {
+        . = ALIGN(0x1000);
+        
         __bss_start = .;
     	*(.bss*)
         *(.bss)

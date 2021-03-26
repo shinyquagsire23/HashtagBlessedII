@@ -106,7 +106,7 @@ fn main() {
             ";
     }
     
-    output += "fn _svc_gen_pre(iss: u32, thread_ctx: u64, ctx: [u64; 32]) {
+    output += "fn _svc_gen_pre(iss: u32, thread_ctx: u64, ctx: [u64; 32]) -> bool {
                    let svc = HorizonSvc::from_iss(iss);
                    let id = match svc {\n";
 
@@ -116,13 +116,22 @@ fn main() {
         let handler = &_svc.1;
         output += "                       HorizonSvc::";
         output += svc;
-        output += "(_) => {task_run_svc(thread_ctx, _svc_shim_";
-        output += handler;
-        output += "(ctx))},\n"
+        output += "(_) => {";
+        if handler != "SvcDefaultHandler" {
+            output += "task_run_svc(thread_ctx, _svc_shim_";
+            output += handler;
+            output += "(ctx))";
+        }
+        else
+        {
+            output += "return true;";
+        }
+        output += "},\n";
     }
 
     output += "    _ => {task_run_svc(thread_ctx, _svc_shim_SvcInvalid(ctx))},
                    };
+                   return false;
                }
     ";
     
