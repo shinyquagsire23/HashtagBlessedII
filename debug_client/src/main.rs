@@ -198,7 +198,7 @@ fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u
 
     let ch = getch();
     let try_chr = char::from_u32(ch as u32);
-    if !try_chr.is_some() {
+    if !try_chr.is_some() || ch == 0x19a { // don't send resize
         return true;
     }
     let ch_str = &format!("{}", try_chr.unwrap());

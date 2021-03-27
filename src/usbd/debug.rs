@@ -368,6 +368,12 @@ pub fn debug_reset_hook(usbd: &mut UsbDevice)
     
     let command = &mut *debug.cmd_buf.lock();
     command.clear();
+    
+    let mut lock = debug.log_buf.lock();
+    let mut log_buf = lock.as_mut().unwrap();
+    log_buf.clear();
+    
+    logger_clear_unprocessed();
 }
 
 pub fn get_debug() -> &'static mut DebugGadget

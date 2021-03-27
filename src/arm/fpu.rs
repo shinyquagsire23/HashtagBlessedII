@@ -4,16 +4,7 @@
  * See LICENSE.md for terms of use.
  */
 
-global_asm!(include_str!("fpu.s"));
-
-extern "C" {
-    pub fn enable_fp();
-}
-
 pub fn fpu_enable()
 {
-    unsafe
-    {
-        enable_fp();
-    }
+    sysreg_or64!("cpacr_el1", (3 << 20));
 }

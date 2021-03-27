@@ -10,7 +10,6 @@ use crate::arm::gic::*;
 use crate::arm::threading::*;
 use crate::arm::exceptions::*;
 use crate::usbd::usbd::*;
-use crate::usbd::cdc::*;
 use crate::task::*;
 use crate::logger::*;
 use crate::vm::vsysreg::*;
@@ -60,10 +59,6 @@ pub const GICH_INT_U:   u32 = (bit!(1)); // underflow
 pub const GICH_INT_EOI: u32 = (bit!(0)); // end of interrupt IRQ
 
 static mut IRQ_HEARTBEAT_DOWNSCALE: [u32; 8] = [0; 8];
-static mut LOCKUP: [u32; 4] = [0; 4];
-static mut LAST_LOCKUP: [u32; 4] = [0; 4];
-
-static mut KICKED_USBCMDLOG: bool = false;
 
 pub fn tegra_irq_is_sgi(irqnum: u16) -> bool
 {
@@ -120,45 +115,26 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
 
     let mut show_irqs = false;
 
-    //TODO
-    if (int_id == 0x1e)
-    {
-        unsafe { LOCKUP[get_core() as usize] += 1; 
-        //let val: u64 = 3;
-        //asm!("msr CNTP_CTL_EL0, {0}", in(reg) val);
-        }
-    }
-
     if (int_id == IRQ_EL2_TIMER) // timer
     {
-        unsafe
-        {
-        let mut tmp: u64 = 3;
-        asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
+        sysreg_write!("cnthp_ctl_el2", 3);
         
         //TODO better place this?
         if (get_core() == 0) {
             task_advance();
         }
 
-        tmp = 0x30000;
-        asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
-        tmp = 0x1;
-        asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
+        sysreg_write!("cnthp_tval_el2", 0x30000);
+        sysreg_write!("cnthp_ctl_el2", 1);
 
-        IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] += 1;
-        if (IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] >= 0x10)
+        unsafe
         {
-            //println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
-            IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] = 0;
-            
-            if (get_core() == 3 && LOCKUP[get_core() as usize] == LAST_LOCKUP[get_core() as usize])
+            IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] += 1;
+            if (IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] >= 0x10)
             {
-                asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) tmp);
-                println!("lockup {:x} {:x}", elr_el2, tmp);
+                //println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
+                IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] = 0;
             }
-            LAST_LOCKUP[get_core() as usize] = LOCKUP[get_core() as usize];
-        }
         }
 
         return elr_el2;
@@ -166,7 +142,9 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
     else if (int_id == IRQ_T210_USB)
     {
         if (get_core() == 0) {
+            task_advance();
             irq_usb();
+            task_advance();
         }
         
         return elr_el2;
@@ -197,29 +175,12 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     //gic.enable_interrupt(IRQ_EL2_GIC_MAINTENANCE, get_core());
     gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
 
-    //TODO
-    /*if (get_core() == 3)
-    {
-        last_core_ret = elr_el2;
-        last_core_name = vsvc_get_curpid_name();
-    }*/
-    //    printf("(core {}) a\n\r", get_core());
-
     gic.enable_interrupt(IRQ_T210_USB, 0);
     tegra_irq_en(20);
 
     gic.set_gich_vmcr();
 
     let mut show_irqs = false;
-
-    //TODO
-    if (int_id == 0x1e)
-    {
-        unsafe { LOCKUP[get_core() as usize] += 1; 
-        //let val: u64 = 3;
-        //asm!("msr CNTP_CTL_EL0, {0}", in(reg) val);
-        }
-    }
 
     if (int_id == IRQ_EL2_TIMER) // timer
     {
@@ -228,41 +189,20 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
             task_advance();
         }
         
-        unsafe
-        {
+        
         let mut tmp: u64 = 0;
 
-        tmp = 0x10000;
-        asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
-        tmp = 0x1;
-        asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
+        sysreg_write!("cnthp_tval_el2", 0x10000);
+        sysreg_write!("cnthp_ctl_el2", 1);
 
-        IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] += 1;
-        if (IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] >= 0x100)
+        unsafe
         {
-            println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
-            IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] = 0;
-            
-            if (get_core() == 3 && LOCKUP[get_core() as usize] == LAST_LOCKUP[get_core() as usize])
+            IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] += 1;
+            if (IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] >= 0x100)
             {
-                asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) tmp);
-                println!("lockup {:x}", elr_el2);
-                
-                /*tmp = 100;
-                asm!("msr CNTP_CVAL_EL0, {0}", in(reg) tmp);
-                tmp = 1;
-                asm!("msr CNTP_CTL_EL0, {0}", in(reg) tmp);*/
-                /*
-                gic_enable_interrupt(0x1e, get_core());
-                GICC_EOIR = 0x1e;
-                GICC_DIR = 0x1e;
-                GICH_APR &= ~BIT(1);*/
-                
-                disable_single_step();
-
+                println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
+                IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] = 0;
             }
-            LAST_LOCKUP[get_core() as usize] = LOCKUP[get_core() as usize];
-        }
         }
         let iar = gic.get_iar();
         gic.set_eoir(iar);

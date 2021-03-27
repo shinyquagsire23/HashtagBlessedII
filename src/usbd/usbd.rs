@@ -16,7 +16,6 @@ use crate::logger::*;
 use core::mem;
 use alloc::vec::Vec;
 use wchar::{wch, wch_c};
-use crate::usbd::cdc::*;
 use crate::usbd::debug::*;
 
 pub const USB2D_BASE: u32 = (0x7D000000);

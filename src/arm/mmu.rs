@@ -4,8 +4,6 @@
  * See LICENSE.md for terms of use.
  */
 
-global_asm!(include_str!("mmu_cpregs.s"));
-
 pub const TTB_LV1_MASK: u64 = 0x7FC0000000;
 pub const TTB_LV1_SHIFT_64KIB: u64 = 29;
 pub const TTB_LV1_SHIFT: u64 = 30;
@@ -29,8 +27,9 @@ pub const TTB_AP_URW_KRW: u64 = 1;
 pub const TTB_AP_UNO_KRO: u64 = 2;
 pub const TTB_AP_URO_KRO: u64 = 3;
 
-extern "C" {
-    pub fn getTTB1() -> u64;
+pub fn get_ttbr1_el1() -> u64
+{
+    sysreg_read!("ttbr1_el1")
 }
 
 pub fn translate_el1_stage12(vaddr: u64) -> u64

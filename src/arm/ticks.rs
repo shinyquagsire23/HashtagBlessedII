@@ -6,24 +6,12 @@
 
 pub fn get_ticks() -> u64
 {
-    unsafe
-    {
-        let mut out: u64 = 0;
-        asm!("mrs {0}, cntpct_el0", out(reg) out);
-
-        return out;
-    }
+    sysreg_read!("cntpct_el0")
 }
 
 pub fn get_tick_freq() -> u64
 {
-    unsafe
-    {
-        let mut out: u64 = 0;
-        asm!("mrs {0}, cntfrq_el0", out(reg) out);
-
-        return out;
-    }
+    sysreg_read!("cntfrq_el0")
 }
 
 pub fn ns_to_ticks(ns: u64) -> u64

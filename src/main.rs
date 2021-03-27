@@ -61,7 +61,6 @@ use vm::vsvc::*;
 use vm::vmmu::*;
 use vm::funcs::*;
 use usbd::usbd::*;
-use usbd::cdc::*;
 use usbd::debug::*;
 use logger::*;
 use alloc::vec::Vec;
@@ -89,20 +88,21 @@ static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x400000]);
 #[no_mangle]
 pub extern "C" fn main_warm() 
 {
-    // TODO is this needed...?
-    //dcache_invalidate(0xD0000000, 0x3000000);
     println!("Hello from core {}! {:016x}", get_core(), vsysreg_getticks());
 
+    // Set up new core with guest memory map
     let lock = critical_start();
     vttbr_transfer_newcore();
     //hcr_trap_wfe();
     //hcr_trap_wfi();
     critical_end(lock);
     
+    // Set up new core with periodic timer
     let mut gic: GIC = GIC::new();
     gic.init();
     irq_timer_init(&mut gic);
 
+    // Trap core's timer registers
     timer_trap_el1_access();
 
     println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
@@ -115,11 +115,9 @@ pub fn irq_timer_init(gic: &mut GIC)
 {
     unsafe
     {
-        let mut tmp: u64 = 0;
-        tmp = 0x10; // quickly jump to IRQ handler so it can reset a better value
-        asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
-        tmp = 0x1;
-        asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
+        // Quickly jump to IRQ handler where it sets its usual interval
+        sysreg_write!("cnthp_tval_el2", 0x10);
+        sysreg_write!("cnthp_ctl_el2", 1);
         gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
     }
 }
@@ -137,21 +135,30 @@ pub extern "C" fn main_cold()
     // Initialize tasking for logger
     task_init();
     
+    // Initialize logger
     logger_init();
+    
+    // Set up USB lockout weirdness w/ SMMU
     smmu_init();
+    
+    // Set up guest memory allocations
     vttbr_init();
     
+    // Set up guest vMMIO, vSVC allocations
+    vmmio_init();
+    vsvc_init();
+    
+    // Start IRQs for USB and tasking
     let mut gic: GIC = GIC::new();
     gic.init();
     irq_timer_init(&mut gic);
 
-    vmmio_init();
-    vsvc_init();
-
+    // Start USB for real
     usbd_recover();
     gic.enable_interrupt(IRQ_T210_USB, 0);
     tegra_irq_en(IRQNUM_T210_USB as i32);
     
+    // Wait for host PC to enumerate device
     let mut time_out = 3000;
     while (!usbd_is_enumerated() && time_out > 0)
     {
@@ -165,6 +172,7 @@ pub extern "C" fn main_cold()
     println!("");
     println!("Waddup from EL2!");
     
+    // Wait forever for debugger to attach
     while (!debug_active() && !debug_acked())
     {
         timer_wait(1000);
@@ -172,19 +180,27 @@ pub extern "C" fn main_cold()
     debug_enable();
     
     println!("USB connection recovered!");
+
+    // Make sure debugger stayed attached
     timer_wait(2000000);
     while (!debug_active() && !debug_acked())
     {
         timer_wait(1000);
     }
     
+    // Let debugger know we're booting
     log_cmd(&[1, 1, 0]);
 
+    // Trap timer register accesses
     timer_trap_el1();
 
+    // Start some tasks
     task_run(example_task());
     task_run(blink_task());
     
+    //
+    // Patching and hooking time...
+    //
     println!("Begin copy to {:016x}... {:x}", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
     memcpy32(ipaddr_to_paddr(KERNEL_START), to_u64ptr!(&KERN_DATA[0]), KERN_DATA.len());
 
@@ -235,6 +251,8 @@ pub extern "C" fn main_cold()
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     println!("Done copy...");
+
+    // Set up guest memory
     let lock = critical_start();
     vttbr_construct();
     
@@ -272,7 +290,7 @@ async fn blink_task()
     {
         let spin = ["|", "/", "-", "\\"];
         i += 1;
-        let spin_idx = ((i >> 3) & 3);
+        let spin_idx = (i & 3);
         print!("{} > {} \r", spin[spin_idx], debug_get_cmd_buf());
         
         // Let debugger know we're on home screen
@@ -280,7 +298,7 @@ async fn blink_task()
             log_cmd(&[1, 1, 0xFF]);
         }
         
-        SleepNs::new(ms_to_ns(10)).await;
+        SleepNs::new(ms_to_ns(100)).await;
     }
 }
 
@@ -289,7 +307,6 @@ pub extern "C" fn exception_handle(which: i32, ctx: u64) -> u64
 {
     unsafe
     {
-    // TODO does this memleak?
     let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
     return handle_exception(which, ctx_slice);
     }
@@ -300,7 +317,6 @@ pub extern "C" fn irq_handle(which: i32, ctx: u64)  -> u64
 {
     unsafe
     {
-    // TODO does this memleak?
     let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
     return virq_handle(ctx_slice);
     }

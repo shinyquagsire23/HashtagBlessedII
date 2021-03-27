@@ -95,7 +95,7 @@ pub async fn logger_task()
     loop
     {
         log_process();
-        SleepNs::new(ms_to_ns(5)).await;
+        SleepNs::new(ms_to_ns(1)).await;
     }
 }
 
@@ -136,6 +136,29 @@ pub fn log_usb_raw(data: &[u8])
     let usbd = get_usbd();
 
     debug_send(usbd, data);
+}
+
+pub fn logger_clear_unprocessed()
+{
+    unsafe
+    {
+        let irq_lock = critical_start();
+        
+        {
+            LOGGER_DATA_COMB.lock().as_mut().unwrap().clear();
+        }
+
+        for core_iter in 0..8
+        {
+            let lock = LOGGER_MUTEX[core_iter].lock();
+
+            let mut logger_cmd = LOGGER_CMD[core_iter].as_mut().unwrap();
+
+            logger_cmd.clear();
+        }
+        
+        critical_end(irq_lock);
+    }
 }
 
 pub fn log_process_cmd()

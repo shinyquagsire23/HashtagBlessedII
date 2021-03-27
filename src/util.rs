@@ -25,6 +25,30 @@ mod util {
             (($a as *const _) as u64)
         }
     }
+    
+    macro_rules! sysreg_read {
+        ($a:expr) => {
+            unsafe { let mut out: u64 = 0; asm!(concat!("mrs {0}, ", $a), out(reg) out); out }
+        }
+    }
+    
+    macro_rules! sysreg_write {
+        ($a:expr, $b:expr) => {
+            unsafe { let val: u64 = ($b) as u64; asm!(concat!(concat!("msr ", $a), ", {0}"), in(reg) val) }
+        }
+    }
+    
+    macro_rules! sysreg_or64 {
+        ($a:expr, $b:expr) => {
+            sysreg_write!($a, sysreg_read!($a) | ($b))
+        }
+    }
+    
+    macro_rules! sysreg_and64 {
+        ($a:expr, $b:expr) => {
+            sysreg_write!($a, sysreg_read!($a) & ($b))
+        }
+    }
 }
 
 pub fn str_from_null_terminated_utf8_u64ptr_unchecked(s: u64) -> &'static str {
