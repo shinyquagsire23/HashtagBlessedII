@@ -561,6 +561,19 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         }
         //mutex_unlock(&exception_print_mutex);
     }
+    else if (ec == EC_WFIWFE)
+    {
+        if (get_core() == 0) {
+            //task_advance();
+        }
+        let lock = critical_start();
+        
+        wfe();
+        isb();
+        critical_end(lock);
+
+        ret_addr = elr_el2+4;
+    }
     else if (ec == EC_MSRMRS)
     {
         //print_exception(ec, iss, ctx, ret_addr);

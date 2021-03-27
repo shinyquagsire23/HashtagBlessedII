@@ -57,7 +57,7 @@ mod logger {
     
     macro_rules! println_uarta {
         () => { };
-        ($fmt:expr) => { crate::logger::logln_unsafe($fmt); };
+        ($fmt:expr) => { crate::logger::log_uarta($fmt); crate::logger::log_uarta("\r\n"); };
         ($fmt:expr, $($arg:tt)*) => {{
             let text = format!($fmt, $($arg)*);
             crate::logger::log_uarta(&text);
@@ -95,7 +95,7 @@ pub async fn logger_task()
     loop
     {
         log_process();
-        SleepNs::new(ms_to_ns(1)).await;
+        SleepNs::new(ms_to_ns(5)).await;
     }
 }
 
@@ -138,6 +138,58 @@ pub fn log_usb_raw(data: &[u8])
     debug_send(usbd, data);
 }
 
+pub fn log_process_cmd()
+{
+    unsafe
+    {
+        let irq_lock = critical_start();
+
+        let mut logger_cmd_copy: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
+        
+        for core_iter in 0..8
+        {
+            let lock = LOGGER_MUTEX[core_iter].lock();
+
+            let mut logger_cmd = LOGGER_CMD[core_iter].as_mut().unwrap();
+
+            logger_cmd_copy[core_iter] = Some(logger_cmd.split_off(0));
+        }
+        
+        // USB side-channel data
+        loop
+        {
+            for core_iter in 0..8
+            {
+                let mut logger_data = logger_cmd_copy[core_iter].as_mut().unwrap();
+                
+                if (logger_data.is_empty())
+                {
+                    continue;
+                }
+
+                log_usb_raw(logger_data.make_contiguous());
+                
+                logger_data.clear();
+            }
+            
+            let mut is_done = true;
+            for core_iter in 0..8
+            {
+                let mut logger_data = logger_cmd_copy[core_iter].as_mut().unwrap();
+                
+                if (!logger_data.is_empty())
+                {
+                    is_done = false;
+                }
+            }
+            
+            if is_done { break; }
+        }
+        
+        critical_end(irq_lock);
+    }
+}
+
 pub fn log_process()
 {
     unsafe
@@ -171,7 +223,7 @@ pub fn log_process()
 
             let data = logger_data.make_contiguous();
             
-            log_uarta_raw(data);
+            //log_uarta_raw(data);
             log_usb_raw(data);
         }
         

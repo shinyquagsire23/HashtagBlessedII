@@ -23,12 +23,10 @@ use binread::{BinRead, io::Cursor};
 const VID_NINTENDO: u16 = 0x057e;
 const PID_SWITCH: u16 = 0x2000;
 
-static mut POLL_LOG: bool = false;
-
 #[derive(BinRead)]
 #[br(magic = b"\x01")]
 struct UsbCmdPacket {
-    pkt_len: u32,
+    pkt_len: u8,
 
     #[br(little, count = pkt_len)]
     data: Vec<u8>,
@@ -136,24 +134,24 @@ fn find_device() -> Option<(rusb::DeviceHandle<rusb::GlobalContext>, u8, u8, u8)
 fn process_input(input_buf: &[u8; 64], n: usize)
 {
     if input_buf[0] == 1 {
-        print!("Received cmd stream... ");
-        
         let mut reader = Cursor::new(input_buf.clone());
         let pkt: UsbCmdPacket = UsbCmdPacket::read(&mut reader).unwrap();
-        
+
         if pkt.pkt_len >= 1 {
             if pkt.data[0] == 0xFF
             {
-                unsafe { POLL_LOG = true; }
-                thread::sleep(time::Duration::from_millis(2000));
+
             }
         }
-        
-        for i in 0..pkt.pkt_len
+        else
         {
-            print!("{:02x} ", pkt.data[i as usize]);
+            print!("Received cmd stream... ");
+            for i in 0..pkt.pkt_len
+            {
+                print!("{:02x} ", pkt.data[i as usize]);
+            }
+            println!("");
         }
-        println!("");
     }
     else
     {
@@ -201,23 +199,12 @@ fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u
     let ch = getch();
     let try_chr = char::from_u32(ch as u32);
     if !try_chr.is_some() {
-        unsafe
-        {
-            if POLL_LOG {
-            let out_buf: [u8; 5] = [0; 5];
-            match handle.write_bulk(ep_out_num, &out_buf, time::Duration::from_millis(10)) {
-                Err(_e) => {
-                    //println!("write err 2 {}", _e);
-                },
-                Ok(_n) => {
-                    //println!("Sent {} bytes", n);
-                },
-            };
-            }
-        }
         return true;
     }
     let ch_str = &format!("{}", try_chr.unwrap());
+    /*for i in 0..ch_str.len() {
+        println!("{:x}", ch_str.as_bytes()[i]);
+    }*/
     
     match handle.write_bulk(ep_out_num, ch_str.as_bytes(), time::Duration::from_millis(10)) {
         Err(_e) => {
@@ -247,11 +234,11 @@ fn main() -> Result<(), Error>
     noecho();
     nodelay(stdscr(), true);
     scrollok(stdscr(), true);
+    curs_set(CURSOR_VISIBILITY::CURSOR_INVISIBLE);
     
     println!("Searching for device...");
     while !term_now.load(Ordering::Relaxed)
     {
-        unsafe { POLL_LOG = false; }
         let handle_try = find_device();
         if !handle_try.is_some() {
             thread::sleep(time::Duration::from_millis(100));

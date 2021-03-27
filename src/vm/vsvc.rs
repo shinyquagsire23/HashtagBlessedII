@@ -232,7 +232,6 @@ impl SvcHandler for SvcCreateProcess
             
             if (proc_name == "overlayDisp") {
                 VSVC_QLAUNCH_STARTED = true;
-                log_cmd(&[1, 1, 0, 0, 0, 0xFF]);
             }
         }
         return pre_ctx;

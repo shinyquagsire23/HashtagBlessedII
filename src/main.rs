@@ -95,6 +95,8 @@ pub extern "C" fn main_warm()
 
     let lock = critical_start();
     vttbr_transfer_newcore();
+    //hcr_trap_wfe();
+    //hcr_trap_wfi();
     critical_end(lock);
     
     let mut gic: GIC = GIC::new();
@@ -118,7 +120,7 @@ pub fn irq_timer_init(gic: &mut GIC)
         asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
         tmp = 0x1;
         asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
-        gic.enable_interrupt(26, get_core());
+        gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
     }
 }
 
@@ -176,7 +178,7 @@ pub extern "C" fn main_cold()
         timer_wait(1000);
     }
     
-    log_cmd(&[1, 0, 0, 0, 0]);
+    log_cmd(&[1, 1, 0]);
 
     timer_trap_el1();
 
@@ -235,6 +237,10 @@ pub extern "C" fn main_cold()
     println!("Done copy...");
     let lock = critical_start();
     vttbr_construct();
+    
+    //hcr_trap_wfe();
+    //hcr_trap_wfi();
+    
     critical_end(lock);
     
     println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
@@ -264,9 +270,17 @@ async fn blink_task()
     let mut i = 0;
     loop
     {
+        let spin = ["|", "/", "-", "\\"];
         i += 1;
-        print!(if (i & 1 == 0) { ".\r" } else { "*\r" });
-        SleepNs::new(ms_to_ns(500)).await;
+        let spin_idx = ((i >> 3) & 3);
+        print!("{} > {} \r", spin[spin_idx], debug_get_cmd_buf());
+        
+        // Let debugger know we're on home screen
+        if vsvc_is_qlaunch_started() {
+            log_cmd(&[1, 1, 0xFF]);
+        }
+        
+        SleepNs::new(ms_to_ns(10)).await;
     }
 }
 

@@ -16,6 +16,8 @@ use crate::logger::*;
 use crate::util::t210_reset;
 use alloc::string::String;
 use crate::io::timer::*;
+use spin::Mutex;
+use alloc::collections::vec_deque::VecDeque;
 
 pub const DEBUG_BULK_PKT_SIZE: u16 = (64);
 
@@ -27,8 +29,8 @@ pub struct DebugGadget
     if0: u8,
     if0_epBulkOut: u8,
     if0_epBulkIn: u8,
-    cmd_buf: String,
-    
+    cmd_buf: spin::Mutex<String>,
+    log_buf: spin::Mutex<Option<VecDeque<u8>>>,
 }
 
 impl DebugGadget
@@ -43,32 +45,52 @@ impl DebugGadget
             if0: 0xff,
             if0_epBulkOut: 0xff,
             if0_epBulkIn: 0xff,
-            cmd_buf: String::new(),
+            cmd_buf: spin::Mutex::new(String::new()),
+            log_buf: spin::Mutex::new(None),
         }
     }
 }
 
 static mut DEBUG_INST: DebugGadget = DebugGadget::empty();
 
+pub fn debug_get_cmd_buf() -> String
+{
+    let debug = get_debug();
+    let lock = debug.cmd_buf.lock();
+
+    return lock.clone();
+}
+
 pub fn debug_process_cmd()
 {
     let debug = get_debug();
     
-    if (debug.cmd_buf == "rcm")
+    let command = &mut *debug.cmd_buf.lock();
+    if (command == "rcm")
     {
         unsafe {t210_reset();}
         loop {}
     }
-    else if (debug.cmd_buf == "irqshow")
+    else if (command == "irqshow")
     {
         //irq_show();
     }
+    else if command == "help" || command == "?"
+    {
+        println!("Available Commands:");
+        println!(" rcm - Reset to RCM mode");
+        println!(" help, ? - Display help");
+        println!("")
+    }
+    else if command == ""
+    {
+    }
     else
     {
-        println!("> Unknown command `{}`", debug.cmd_buf);
+        println!("> Unknown command `{}`", command);
     }
     
-    debug.cmd_buf.clear();
+    command.clear();
 }
 
 pub fn debug_disable()
@@ -103,49 +125,83 @@ pub fn debug_acked() -> bool
     return debug.has_acked;
 }
 
+fn debug_send_next(usbd: &mut UsbDevice)
+{
+    let debug = get_debug();
+    
+    if (!debug.isactive) { return; }
+    
+    let mut lock = debug.log_buf.lock();
+    let mut log_buf = lock.as_mut().unwrap();
+    
+    if (log_buf.is_empty()) { return; }
+    
+    let mut to_send: usize = log_buf.len() as usize;
+    
+    if (to_send > 64) {
+        to_send = 64;
+    }
+    
+    // Command packet, read length
+    if log_buf[0] == 1 && log_buf.len() >= 2 {
+        to_send = (log_buf[1]+2) as usize;
+    }
+    else {
+        // Keep command packets in their own individual bulk transfers
+        // by truncating up to next command
+        for i in 0..to_send
+        {
+            if log_buf[i] == 1 {
+                to_send = i;
+                break;
+            }
+        }
+    }
+    
+    if to_send > log_buf.len() {
+        to_send = log_buf.len();
+    }
+    
+    if (to_send > 64) {
+        to_send = 64;
+    }
+    
+    let mut copied: [u8; 64] = [0; 64];
+    for i in 0..to_send
+    {
+        copied[i] = log_buf[i];
+    }
+
+    usbd.ep_tx(debug.if0_epBulkIn, to_u64ptr!(&copied[0]), to_send, false);
+}
+
 pub fn debug_send(usbd: &mut UsbDevice, data: &[u8])
 {
     let debug = get_debug();
     
     if (!debug.isactive) { return; }
 
-    let is_enabled = /*debug.enabled && debug.isactive &&*/ (get_core() == 0);
-
     if (data.len() == 0)
     {
-        //mutexUnlock(&debug_send_mutex);
         return;
     }
-
-    if (is_enabled /*&& mutexTryLock(&debug_usb_mutex)*/)
+    
+    // Copy data to our own outbuf
     {
-        let mut bytes_to_send: i32 = (data.len() & 0x7FFFFFFF) as i32;
-        //mutexUnlock(&debug_send_mutex);
-
-        let mut i = 0;
-        loop
+        let mut lock = debug.log_buf.lock();
+        let mut log_buf = lock.as_mut().unwrap();
+        
+        for i in 0..data.len()
         {
-            if (bytes_to_send <= 0) { break; }
-            
-            let mut to_send: usize = bytes_to_send as usize;
-            if (to_send > 64) {
-                to_send = 64;
-            }
-            for j in 0..10
-            {
-                if(usbd.ep_tx(debug.if0_epBulkIn, to_u64ptr!(&data[i]), to_send, true) == UsbdError::Success) {
-                    break;
-                }
-                timer_wait(1000);
-            }
-            bytes_to_send -= to_send as i32;
-            i += to_send;
+            log_buf.push_back(data[i]);
         }
-        //mutexUnlock(&debug_usb_mutex);
-
-        return;
     }
-    //mutexUnlock(&debug_send_mutex);
+
+    // Begin a transfer here if ep is already idle, next transfer begins on success/fail/idle
+    if usbd.ep_status(debug.if0_epBulkIn) == UsbEpStatus::TxfrIdle
+    {
+        debug_send_next(usbd);
+    }
 }
 
 pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
@@ -173,36 +229,65 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
         return;
     }
     
-    //println!("read {} bytes", len);
-    
-    let mut to_send: Vec<u8> = Vec::with_capacity(DEBUG_BULK_PKT_SIZE as usize);
-    let p_to_send = to_u64ptr!(to_send.as_mut_ptr());
-    
-    // Send our data
-    log_raw(&to_send.as_slice());
-    
     // Convert the strings or whatever
+    let mut is_escape = false;
     for i in 0..(len as usize)
     {
         let val = pkt_data.offset(i as isize).read();
         if (val == 0) { continue; }
-
-        debug.cmd_buf.push(val as char);
-        to_send.push(val);
         
         if (val == '\n' as u8)
         {
             // Send our data
-            log_raw(&to_send.as_slice());
-    
-            debug.cmd_buf.pop();
+            {
+                let command = &mut *debug.cmd_buf.lock();
+                println!("> {} ", command);
+            }
+            
             debug_process_cmd();
-            to_send.clear();
+        }
+        else if (val == 0xc4 || val == 0xc5)
+        {
+            is_escape = true;
+            continue;
+        }
+        else if (is_escape && val == 0x87) // backspace
+        {
+            let command = &mut *debug.cmd_buf.lock();
+            command.pop();
+        }
+        else if (is_escape && val == 0x84) // left
+        {
+        }
+        else if (is_escape && val == 0x85) // right
+        {
+        }
+        else if (is_escape && val == 0x83) // up
+        {
+        }
+        else if (is_escape && val == 0x82) // down
+        {
+        }
+        else if (is_escape && val >= 0x89 && val <= 0x94) // F1-F12
+        {
+        }
+        else if (is_escape && val == 0x8b) // ins
+        {
+        }
+        else if (is_escape && val == 0x8a) // del
+        {
+            
+        }
+        else
+        {
+            let command = &mut *debug.cmd_buf.lock();
+            command.push(val as char);
         }
     }
     
     // Send our data
-    log_raw(&to_send.as_slice());
+    //let command = &mut *debug.cmd_buf.lock();
+    //print!("> {} \r", command);
     log_try_flush(get_core(), true);
     }
 }
@@ -210,6 +295,19 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
 pub fn debug_if0_sendcomplete(usbd: &mut UsbDevice, epNum: u8)
 {
     let debug = get_debug();
+    
+    let len = usbd.get_bytes_received(debug.if0_epBulkIn);
+    
+    {
+        let mut lock = debug.log_buf.lock();
+        let mut log_buf = lock.as_mut().unwrap();
+        for i in 0..len
+        {
+            log_buf.pop_front();
+        }
+    }
+    
+    debug_send_next(usbd);
 }
 
 pub fn debug_if0_recvfail(usbd: &mut UsbDevice, epNum: u8)
@@ -218,7 +316,7 @@ pub fn debug_if0_recvfail(usbd: &mut UsbDevice, epNum: u8)
 
     let len = usbd.get_bytes_received(debug.if0_epBulkOut);
     
-    //println!("read {} bytes then failed!", len);
+   //println!("read {} bytes then failed!", len);
 }
 
 pub fn debug_if0_sendfail(usbd: &mut UsbDevice, epNum: u8)
@@ -227,7 +325,16 @@ pub fn debug_if0_sendfail(usbd: &mut UsbDevice, epNum: u8)
     
     let len = usbd.get_bytes_received(debug.if0_epBulkIn);
     
-    //println!("sent {} bytes then failed!", len);
+    {
+        let mut lock = debug.log_buf.lock();
+        let mut log_buf = lock.as_mut().unwrap();
+        for i in 0..len
+        {
+            log_buf.pop_front();
+        }
+    }
+    
+    debug_send_next(usbd);
 }
 
 pub fn debug_if0_recvidle(usbd: &mut UsbDevice, epNum: u8)
@@ -247,6 +354,8 @@ pub fn debug_if0_sendidle(usbd: &mut UsbDevice, epNum: u8)
     
     debug.enabled = true;
     debug.isactive = true;
+    
+    debug_send_next(usbd);
 }
 
 pub fn debug_reset_hook(usbd: &mut UsbDevice)
@@ -256,7 +365,9 @@ pub fn debug_reset_hook(usbd: &mut UsbDevice)
     debug.isactive = false;
     debug.enabled = false;
     debug.has_acked = false;
-    debug.cmd_buf.clear();
+    
+    let command = &mut *debug.cmd_buf.lock();
+    command.clear();
 }
 
 pub fn get_debug() -> &'static mut DebugGadget
@@ -271,6 +382,8 @@ pub fn debug_init()
 {
     let usbd = get_usbd();
     let debug = get_debug();
+    
+    debug.log_buf = spin::Mutex::new(Some(VecDeque::new()));;
     
     // We allocate two interfaces, one has an interrupt EP (unused?) 
     // and the other has two bulk endpoints for each direction

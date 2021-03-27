@@ -5,6 +5,7 @@
  */
 
 use crate::logger::*;
+use crate::arm::threading::*;
 
 global_asm!(include_str!("virtualization.s"));
 
@@ -42,5 +43,29 @@ pub fn timer_trap_el1_access()
         //println!("{:x}", cnthctl_el2);
         cnthctl_el2 &= !0x3; // trap EL1 accesses to timer controls but not accesses
         set_cnthctl_el2(cnthctl_el2);
+    }
+}
+
+pub fn hcr_trap_wfe()
+{
+    unsafe
+    {
+        let mut hcr_el2: u64 = 0;
+        asm!("mrs {0}, hcr_el2", out(reg) hcr_el2);
+        hcr_el2 |= bit!(14);   
+        asm!("msr hcr_el2, {0}", in(reg) hcr_el2);
+        isb();
+    }
+}
+
+pub fn hcr_trap_wfi()
+{
+    unsafe
+    {
+        let mut hcr_el2: u64 = 0;
+        asm!("mrs {0}, hcr_el2", out(reg) hcr_el2);
+        hcr_el2 |= bit!(14);   
+        asm!("msr hcr_el2, {0}", in(reg) hcr_el2);
+        isb();
     }
 }

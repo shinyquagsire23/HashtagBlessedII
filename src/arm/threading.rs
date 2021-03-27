@@ -17,3 +17,39 @@ extern "C" {
 pub fn get_core() -> u8 {
     unsafe { return _get_core(); }
 }
+
+#[inline(always)]
+pub fn isb()
+{
+    unsafe
+    {
+        asm!("isb");
+    }
+}
+
+#[inline(always)]
+pub fn dsb()
+{
+    unsafe
+    {
+        asm!("dsb");
+    }
+}
+
+#[inline(always)]
+pub fn wfi()
+{
+    unsafe
+    {
+        asm!("wfi");
+    }
+}
+
+#[inline(always)]
+pub fn wfe()
+{
+    unsafe
+    {
+        asm!("wfe");
+    }
+}

@@ -98,13 +98,13 @@ pub fn vsysreg_handle(iss: u32, ctx: &mut [u64]) -> u64
         {
             let val = ctx[rt as usize];
             asm!("msr TTBR0_EL1, {0}", in(reg) val);
-            //println!("(core {}) TTBR0_EL1 {:016x}", get_core(), val);
+            println!("(core {}) TTBR0_EL1 {:016x}", get_core(), val);
         }
         else if (opc1 == 0 && crn == 2 && crm == 0 && opc2 == 1)
         {
             let val = ctx[rt as usize];
             asm!("msr TTBR1_EL1, {0}", in(reg) val);
-            //println!("(core {}) TTBR1_EL1 {:016x}", get_core(), val);
+            println!("(core {}) TTBR1_EL1 {:016x}", get_core(), val);
         }
         else if (opc1 == 0 && crn == 2 && crm == 0 && opc2 == 2)
         {

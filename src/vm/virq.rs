@@ -111,22 +111,11 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
     let vcpu = ((hppir >> 10) & 0x7) as u8;
     let int_id = (hppir & 0x3FF) as u16;
     
-    if (get_core() == 0)
+    if (get_core() == 0 && int_id < 16)
     {
-        //task_advance();
-        //irq_usb();
-        
         gic.enable_interrupt(IRQ_T210_USB, 0);
         tegra_irq_en(20);
-        
-        unsafe
-        {
-            if (get_core() == 0 && vsvc_is_qlaunch_started() && !KICKED_USBCMDLOG) {
-                task_advance();
-                KICKED_USBCMDLOG = true;
-            }
-        }
-        //gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
+        gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
     }
 
     let mut show_irqs = false;
@@ -149,10 +138,10 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
         
         //TODO better place this?
         if (get_core() == 0) {
-            //task_advance();
+            task_advance();
         }
 
-        tmp = 0x100000;
+        tmp = 0x30000;
         asm!("msr CNTHP_TVAL_EL2, {0}", in(reg) tmp);
         tmp = 0x1;
         asm!("msr CNTHP_CTL_EL2, {0}", in(reg) tmp);
@@ -160,95 +149,28 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
         IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] += 1;
         if (IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] >= 0x10)
         {
-            println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
+            //println!("(core {}) heartbeat {:x} `{}`", get_core(), vsvc_get_curpid(), vsvc_get_curpid_name());
             IRQ_HEARTBEAT_DOWNSCALE[get_core() as usize] = 0;
             
             if (get_core() == 3 && LOCKUP[get_core() as usize] == LAST_LOCKUP[get_core() as usize])
             {
                 asm!("mrs {0}, CNTP_CVAL_EL0", out(reg) tmp);
-                println!("lockup {:x}", elr_el2);
-                
-                /*tmp = 100;
-                asm!("msr CNTP_CVAL_EL0, {0}", in(reg) tmp);
-                tmp = 1;
-                asm!("msr CNTP_CTL_EL0, {0}", in(reg) tmp);*/
-                /*
-                gic_enable_interrupt(0x1e, get_core());
-                GICC_EOIR = 0x1e;
-                GICC_DIR = 0x1e;
-                GICH_APR &= ~BIT(1);*/
-                
-                //disable_single_step();
-
+                println!("lockup {:x} {:x}", elr_el2, tmp);
             }
             LAST_LOCKUP[get_core() as usize] = LOCKUP[get_core() as usize];
         }
         }
-        let iar = gic.get_iar();
-        gic.set_eoir(iar);
-        gic.set_dir(iar);
 
         return elr_el2;
     }
     else if (int_id == IRQ_T210_USB)
     {
         if (get_core() == 0) {
-            task_advance();
-        
             irq_usb();
         }
-
-        tegra_irq_ack(int_id as i32);
-
-        let iar = gic.get_iar();
-        gic.set_eoir(iar);
-        gic.set_dir(iar);
         
         return elr_el2;
     }
-/*    else if (int_id != 0x3FF)
-    {
-        if (int_id == 0x1e) {
-            //show_irqs = true;
-        }
-
-        gic.send_interrupt(int_id, vcpu, rpr);
-        gic.process_queue();
-    }
-
-    if (show_irqs) 
-    {
-        println!("IRQ core {} (misr {:x} rpr {:x} id {:x}, vcpu {}, IAR {:04x}->{:04x} LR[0] {:08x} ELSR0 {:08x} hppir {:04x}->{:04x}, vrpr {:02x}->{:02x}) ret {:016x}",
-               get_core(),
-               gic.get_gich_misr(), rpr, int_id, vcpu,
-               iar, gic.gicv.gicv_hppir.r32(),
-               gic.gich.gich_lr.r32(), gic.gich.gich_elsr0.r32(),
-               hppir, gic.gicc.gicc_hppir.r32(),
-               vrpr, gic.gicv.gicv_rpr.r32(),
-               elr_el2);
-    }
-
-    // TODO was this correct...?
-    if (int_id != IRQ_INVALID)
-    {
-        // software interrupts can be fully signalled
-        if (tegra_irq_is_sgi(int_id))
-        {
-            gic.set_eoir(iar);
-            //gic.set_dir(iar);
-        }
-        else
-        {
-            // Hardware interrupts need to be acknowledged so that another IRQ
-            // doesn't show up, however GICC_DIR will need to be written once it
-            // completes
-            gic.set_eoir(iar);
-        }
-    }*/
-
-    //if (get_core() == 3)
-     //   printf("(core {}) b\n\r", get_core());
-    //TODO
     
     return elr_el2;
 }
@@ -272,7 +194,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     //let iar_vcpu = ((iar >> 10) & 0x7) as u8;
     //let iar_int_id = (iar & 0x3FF) as u16;
 
-    gic.enable_interrupt(IRQ_EL2_GIC_MAINTENANCE, get_core());
+    //gic.enable_interrupt(IRQ_EL2_GIC_MAINTENANCE, get_core());
     gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
 
     //TODO
