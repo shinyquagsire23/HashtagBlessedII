@@ -9,6 +9,7 @@ use crate::arm::threading::*;
 use crate::arm::mmu::*;
 use crate::exception_handler::*;
 use crate::util::*;
+use crate::vm::vsvc::vsvc_register_ttbr;
 
 static mut HAS_HOOKED_EXCEPTIONS: bool = false;
 
@@ -88,33 +89,42 @@ pub fn vsysreg_handle(iss: u32, ctx: &mut [u64]) -> u64
         else if (opc1 == 0 && crn == 2 && crm == 0 && opc2 == 0)
         {
             sysreg_write!("ttbr0_el1", val);
-            println!("(core {}) TTBR0_EL1 {:016x}", get_core(), val);
+            //println!("(core {}) TTBR0_EL1 {:016x}", get_core(), val);
         }
         else if (opc1 == 0 && crn == 2 && crm == 0 && opc2 == 1)
         {
             sysreg_write!("ttbr1_el1", val);
-            println!("(core {}) TTBR1_EL1 {:016x}", get_core(), val);
+            //println!("(core {}) TTBR1_EL1 {:016x}", get_core(), val);
         }
         else if (opc1 == 0 && crn == 2 && crm == 0 && opc2 == 2)
         {
             sysreg_write!("tcr_el1", val);
-            println!("(core {}) TCR_EL1 {:016x}", get_core(), val);
+            //println!("(core {}) TCR_EL1 {:016x}", get_core(), val);
         }
         else if (opc1 == 0 && crn == 10 && crm == 2 && opc2 == 0)
         {
             sysreg_write!("mair_el1", val);
-            println!("(core {}) MAIR_EL1 {:016x}", get_core(), val);
+            //println!("(core {}) MAIR_EL1 {:016x}", get_core(), val);
         }
         else if (opc1 == 0 && crn == 1 && crm == 0 && opc2 == 0)
         {
             sysreg_write!("sctlr_el1", val);
-            println!("(core {}) SCTLR_EL1 {:016x}", get_core(), val);
+            //println!("(core {}) SCTLR_EL1 {:016x}", get_core(), val);
         }
         else if (opc1 == 0 && crn == 13 && crm == 0 && opc2 == 1)
         {
             sysreg_write!("contextidr_el1", val);
             
+            let vttbr0 = sysreg_read!("ttbr0_el1");
+            let pid: u32 = (val & 0xFFFFFFFF) as u32;
+            let addr: u64 = (vttbr0 & 0x0000FFFFFFFFFFFF) as u64;
+            
+            if (addr != 0) {
+                vsvc_register_ttbr(pid, addr);
+            }
+            
             //TODO check address space?
+            //println!("{:016x}", get_ttbr1_el1());
             
             //let mut val_vbar: u64 = 0;
 	        //asm!("mrs {0}, VBAR_EL1", out(reg) val_vbar);

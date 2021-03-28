@@ -23,7 +23,9 @@ use async_trait::async_trait;
 
 static mut LAST_CREATED: [Option<String>; 8] = [None, None, None, None, None, None, None, None];
 static mut RUNNING_PROCESS_NAME: BTreeMap<u32, String> = BTreeMap::new();
+static mut PROCESS_NAME_PID: BTreeMap<String, u32> = BTreeMap::new();
 static mut VSVC_QLAUNCH_STARTED: bool = false;
+static mut VSVC_TTBRS: BTreeMap<u32, u64> = BTreeMap::new();
 
 include!(concat!(env!("OUT_DIR"), "/vsvc_gen.rs"));
 
@@ -53,6 +55,25 @@ impl SvcHandler for SvcDefaultHandler
     }
 }
 
+pub fn vsvc_register_ttbr(pid: u32, ttbr: u64)
+{
+    unsafe
+    {
+        VSVC_TTBRS.insert(pid, ttbr);
+    }
+}
+
+pub fn vsvc_get_pid_ttbr(pid: u32) -> u64
+{
+    unsafe
+    {
+        match VSVC_TTBRS.get(&pid) {
+           Some(addr) => *addr,
+           None => 0
+        }
+    }
+}
+
 pub fn vsvc_is_qlaunch_started() -> bool
 {
     unsafe { return VSVC_QLAUNCH_STARTED; }
@@ -71,6 +92,15 @@ pub fn vsvc_init()
         RUNNING_PROCESS_NAME.insert(6, String::from("spl"));
         RUNNING_PROCESS_NAME.insert(7, String::from("boot"));
         RUNNING_PROCESS_NAME.insert(0xFF, String::from("idle core"));
+        
+        PROCESS_NAME_PID.insert(String::from("FS"), 1);
+        PROCESS_NAME_PID.insert(String::from("Loader"), 2);
+        PROCESS_NAME_PID.insert(String::from("NCM"), 3);
+        PROCESS_NAME_PID.insert(String::from("ProcessMana"), 4);
+        PROCESS_NAME_PID.insert(String::from("sm"), 5);
+        PROCESS_NAME_PID.insert(String::from("spl"), 6);
+        PROCESS_NAME_PID.insert(String::from("boot"), 7);
+        PROCESS_NAME_PID.insert(String::from("kernel"), 0xFF);
     }
 }
 
@@ -93,6 +123,17 @@ pub fn vsvc_get_pid_name(pid: u32) -> String
         match RUNNING_PROCESS_NAME.get(&pid) {
            Some(name) => name.clone(),
            None => String::from("unknown pid")
+        }
+    }
+}
+
+pub fn vsvc_get_process_pid(name: &String) -> u32
+{
+    unsafe
+    {
+        match PROCESS_NAME_PID.get(name) {
+           Some(pid) => *pid,
+           None => 0
         }
     }
 }
@@ -250,6 +291,7 @@ impl SvcHandler for SvcQueryMemory
                 let name = &LAST_CREATED[get_core() as usize];
                 if name.is_some() {
                     RUNNING_PROCESS_NAME.insert(vsvc_get_curpid(), name.as_ref().unwrap().clone());
+                    PROCESS_NAME_PID.insert(name.as_ref().unwrap().clone(), vsvc_get_curpid());
                 }
             }
         }

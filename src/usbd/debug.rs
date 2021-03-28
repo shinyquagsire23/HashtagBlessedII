@@ -18,6 +18,7 @@ use alloc::string::String;
 use crate::io::timer::*;
 use spin::Mutex;
 use alloc::collections::vec_deque::VecDeque;
+use crate::vm::vsvc::*;
 
 pub const DEBUG_BULK_PKT_SIZE: u16 = (64);
 
@@ -65,7 +66,19 @@ pub fn debug_process_cmd()
 {
     let debug = get_debug();
     
-    let command = &mut *debug.cmd_buf.lock();
+    let command_full = &mut *debug.cmd_buf.lock();
+    let mut command = command_full.clone();
+    let mut args: Vec<String> = Vec::new();
+    
+    match command_full.split_once(' ') {
+        Some(split) => {
+            command = String::from(split.0);
+            args = split.1.split_ascii_whitespace().map(|s| String::from(s)).collect();
+        },
+        None => {
+        }
+    };
+    
     if (command == "rcm")
     {
         unsafe {t210_reset();}
@@ -74,6 +87,26 @@ pub fn debug_process_cmd()
     else if (command == "irqshow")
     {
         //irq_show();
+    }
+    else if (command == "ttbr")
+    {
+        if (args.len() < 1)
+        {
+            println!("Usage: ttbr <pid/name>");
+        }
+        else
+        {
+            match args[0].parse::<u32>() {
+                Ok(pid) => {
+                    println!("PID {} ({}) TTBR: {:016x}", pid, vsvc_get_pid_name(pid), vsvc_get_pid_ttbr(pid));
+                }
+                Error => {
+                    let pid = vsvc_get_process_pid(&args[0]);
+                    println!("PID {} ({}) TTBR: {:016x}", pid, vsvc_get_pid_name(pid), vsvc_get_pid_ttbr(pid));
+                }
+            };
+            
+        }
     }
     else if command == "help" || command == "?"
     {
@@ -90,7 +123,7 @@ pub fn debug_process_cmd()
         println!("> Unknown command `{}`", command);
     }
     
-    command.clear();
+    command_full.clear();
 }
 
 pub fn debug_disable()
