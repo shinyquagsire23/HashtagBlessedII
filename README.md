@@ -1,13 +1,17 @@
 # HashtagBlessedII
 
-Nintendo Switch/T210 hypervisor, being rewritten in Rust
+HashtagBlessedII is a Nintendo Switch/Tegra T210 hypervisor written in Rust
 
-* See LICENSE.md for license deets
+HashtagBlessedII focuses on allowing the extension and debugging of Nintendo's proprietary Horizon microkernel via SVC/SMC/MMIO MiTM. It also provides an omnipresent USB debugger (`src/usbd/debug.rs` and `debug_client/`) for inspecting running processes and logging system state.
+
+![Client debugger screenshot](media/debugger.png)
+
+* See LICENSE.md for license details
 
 NOTE: Currently only adapted for 8.0.1
 
 ## Building
-* Requires `0_kernel_80060000.bin` from pk2
+* Requires `0_kernel_80060000.bin` from PK2
 * Install `rustup`
 * `rustup update`
 * `rustup default nightly`

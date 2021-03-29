@@ -132,7 +132,7 @@ pub fn vsvc_get_pid_name(pid: u32) -> String
     {
         match RUNNING_PROCESS_NAME.get(&pid) {
            Some(name) => name.clone(),
-           None => String::from("unknown pid")
+           None => format!("unknown pid {}", pid)
         }
     }
 }
