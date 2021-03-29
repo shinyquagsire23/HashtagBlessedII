@@ -72,6 +72,7 @@ use arm::ticks::*;
 use arm::threading::get_core;
 use exception_handler::*;
 use vm::vsysreg::*;
+use crate::vm::vsmc::vsmc_get_warm_entrypoint;
 
 global_asm!(include_str!("start.s"));
 
@@ -86,8 +87,35 @@ struct PageAlignedHeapAlloc([u8; 0x400000]);
 static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x400000]);
 
 #[no_mangle]
-pub extern "C" fn main_warm() 
+pub extern "C" fn main_warm(arg: u64) 
 {
+    // Warm boot from sleep mode
+    if get_core() == 0
+    {
+        let mut uart_a: UARTDevice = UARTDevice::new(UartA);
+        uart_a.init(115200);
+    
+        fpu_enable();
+        smmu_init();
+        vttbr_init();
+        
+        task_clear_all();
+        logger_init();
+        
+        // Start IRQs for USB and tasking
+        let mut gic: GIC = GIC::new();
+        gic.init();
+        irq_timer_init(&mut gic);
+
+        // Start USB for real
+        usbd_recover();
+        gic.enable_interrupt(IRQ_T210_USB, 0);
+        tegra_irq_en(IRQNUM_T210_USB as i32);
+        
+        task_run(blink_task());
+    }
+    
+    
     println!("Hello from core {}! {:016x}", get_core(), vsysreg_getticks());
 
     // Set up new core with guest memory map
@@ -104,9 +132,11 @@ pub extern "C" fn main_warm()
 
     // Trap core's timer registers
     timer_trap_el1_access();
+    
+    let warm_entrypoint = vsmc_get_warm_entrypoint();
 
-    println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
-    unsafe { drop_to_el1(KERNEL_START); }
+    println!("translate {:016x} -> {:016x}", warm_entrypoint, translate_el1_stage12(warm_entrypoint));
+    unsafe { drop_to_el1(warm_entrypoint, arg); }
     
     loop{}
 }
@@ -266,7 +296,7 @@ pub extern "C" fn main_cold()
     
     unsafe
     {
-        drop_to_el1(KERNEL_START);
+        drop_to_el1(KERNEL_START, 0);
         loop {}
     }
 }
@@ -291,7 +321,7 @@ async fn blink_task()
         let spin = ["|", "/", "-", "\\"];
         i += 1;
         let spin_idx = (i & 3);
-        print!("{} > {} \r", spin[spin_idx], debug_get_cmd_buf());
+        print!("{} > {:<80} last {}ns max {}ns  \r", spin[spin_idx], debug_get_cmd_buf(), get_tasking_time(), get_tasking_time_max());
         
         // Let debugger know we're on home screen
         if vsvc_is_qlaunch_started() {
@@ -307,8 +337,8 @@ pub extern "C" fn exception_handle(which: i32, ctx: u64) -> u64
 {
     unsafe
     {
-    let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
-    return handle_exception(which, ctx_slice);
+        let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
+        return handle_exception(which, ctx_slice);
     }
 }
 
@@ -317,8 +347,8 @@ pub extern "C" fn irq_handle(which: i32, ctx: u64)  -> u64
 {
     unsafe
     {
-    let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
-    return virq_handle(ctx_slice);
+        let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
+        return virq_handle(ctx_slice);
     }
     
 }

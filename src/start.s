@@ -95,6 +95,7 @@ _bss_clear_loop:
 
 warm_start:
     msr daifset, #0xf
+    mov x8, x0
 
     // Interrupts go to EL2
     mov x0, #0x10
@@ -147,8 +148,7 @@ warm_start:
     sub sp, sp, #0x10
     str lr, [sp]
 
-    mrs x0, MPIDR_EL1
-    and x0, x0, #0xFF
+    mov x0, x8
     bl main_warm
 
     ldr lr, [sp]

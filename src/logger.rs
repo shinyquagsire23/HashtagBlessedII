@@ -28,6 +28,18 @@ static mut LOGGER_CMD: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None
 
 #[macro_use]
 mod logger {
+    macro_rules! println_core {
+        () => { };
+        ($fmt:expr) => {
+            crate::logger::log(&format!("(core {}) ", crate::arm::threading::get_core()));
+            crate::logger::logln($fmt);
+        };
+        ($fmt:expr, $($arg:tt)*) => {{
+            let text = format!($fmt, $($arg)*);
+            crate::logger::logln(&text);
+        }};
+    }
+    
     macro_rules! println {
         () => { };
         ($fmt:expr) => { crate::logger::logln($fmt); };
@@ -107,6 +119,7 @@ pub fn logger_unsafe_override()
         {
             LOGGER_MUTEX[i].force_unlock();
         }
+        LOGGER_DATA_COMB.force_unlock();
     }
 }
 
@@ -153,6 +166,15 @@ pub fn logger_clear_unprocessed()
             let lock = LOGGER_MUTEX[core_iter].lock();
 
             let mut logger_cmd = LOGGER_CMD[core_iter].as_mut().unwrap();
+
+            logger_cmd.clear();
+        }
+        
+        for core_iter in 0..8
+        {
+            let lock = LOGGER_MUTEX[core_iter].lock();
+
+            let mut logger_cmd = LOGGER_DATA[core_iter].as_mut().unwrap();
 
             logger_cmd.clear();
         }
@@ -218,68 +240,41 @@ pub fn log_process()
     unsafe
     {
         let irq_lock = critical_start();
-        
-        // Process data later if this gets called mid-log
-        // TODO per-core mutex?
-        // TODO timestamps?
-        
-        let mut logger_data_copy: Option<VecDeque<u8>> = None;
-        let mut logger_cmd_copy: [Option<VecDeque<u8>>; 8] = [None, None, None, None, None, None, None, None];
-        
-        {
-            logger_data_copy = Some(LOGGER_DATA_COMB.lock().as_mut().unwrap().split_off(0));
-            for core_iter in 0..8
-            {
-                let lock = LOGGER_MUTEX[core_iter].lock();
 
-                let mut logger_cmd = LOGGER_CMD[core_iter].as_mut().unwrap();
-
-                logger_cmd_copy[core_iter] = Some(logger_cmd.split_off(0));
-            }
-        }
-        
         // Main log
-        let mut logger_data = logger_data_copy.as_mut().unwrap();
+        let usbd = get_usbd();
         
-        if (!logger_data.is_empty())
-        {
-
-            let data = logger_data.make_contiguous();
-            
-            //log_uarta_raw(data);
-            log_usb_raw(data);
-        }
+        // About 46ns per character?
         
-        // USB side-channel data
-        loop
         {
-            for core_iter in 0..8
-            {
-                let mut logger_data = logger_cmd_copy[core_iter].as_mut().unwrap();
-                
-                if (logger_data.is_empty())
-                {
-                    continue;
-                }
-
-                log_usb_raw(logger_data.make_contiguous());
-                
-                logger_data.clear();
-            }
+            let mut lock_comb = LOGGER_DATA_COMB.try_lock();
+            let mut lines_flushed = 0;
             
-            let mut is_done = true;
-            for core_iter in 0..8
-            {
-                let mut logger_data = logger_cmd_copy[core_iter].as_mut().unwrap();
-                
-                if (!logger_data.is_empty())
+            if let Some(mut comb) = lock_comb {
+                let logger_data = comb.as_mut().unwrap();
+                for i in 0..256
                 {
-                    is_done = false;
+                    match logger_data.pop_front() {
+                        Some(data) => {
+                            //log_uarta_raw(data);
+                            debug_send_byte(usbd, data);
+                            if data == '\n' as u8 {
+                                debug_flush(usbd);
+                                lines_flushed += 1;
+                                if lines_flushed > 3 {
+                                    break;
+                                }
+                            }
+                        },
+                        None => { break; }
+                    }
                 }
             }
-            
-            if is_done { break; }
         }
+        
+        //log_process_cmd();
+        
+        debug_flush(usbd);
         
         critical_end(irq_lock);
     }

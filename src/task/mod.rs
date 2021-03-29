@@ -95,6 +95,14 @@ pub fn task_advance()
     }
 }
 
+pub fn task_clear_all()
+{
+    unsafe
+    {
+        EXECUTOR = Some(Executor::new());
+    }
+}
+
 pub fn task_advance_svc(task_id: SvcTaskId) -> Option<[u64; 32]>
 {
     unsafe

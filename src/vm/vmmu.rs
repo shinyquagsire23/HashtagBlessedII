@@ -85,7 +85,7 @@ pub fn vttbr_init()
 {
     unsafe
     {        
-        println!("{:p} {:p} {:p}", &VTTBR_LV1, &VTTBR_LV2_SLAB, &VTTBR_LV3_SLAB);
+        //println!("{:p} {:p} {:p}", &VTTBR_LV1, &VTTBR_LV2_SLAB, &VTTBR_LV3_SLAB);
     }
 }
 

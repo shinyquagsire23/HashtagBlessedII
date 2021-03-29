@@ -68,6 +68,28 @@ pub fn str_from_null_terminated_utf8_u64ptr_unchecked(s: u64) -> &'static str {
     }
 }
 
+pub fn str_from_null_terminated_utf8_u64ptr_unchecked_len(s: u64, len: u32) -> &'static str {
+    unsafe {
+        let s_raw = s as *const u8;
+        let mut s_len = 0;
+        loop
+        {
+            if s_raw.offset(s_len).read() == 0
+            {
+                break;
+            }
+            s_len += 1;
+        }
+        
+        if s_len > s_len {
+            s_len = len as isize;
+        }
+        
+        let s_slice: &'static [u8] = alloc::slice::from_raw_parts(s as *const u8, (s_len) as usize);
+        str::from_utf8_unchecked(&s_slice)
+    }
+}
+
 pub fn str_from_null_terminated_utf8_unchecked(s: &[u8]) -> &str {
     unsafe { str::from_utf8_unchecked(s) }
 }

@@ -24,6 +24,7 @@ pub const DEBUG_BULK_PKT_SIZE: u16 = (64);
 
 pub struct DebugGadget
 {
+    is_initted: bool,
     isactive: bool,
     enabled: bool,
     has_acked: bool,
@@ -40,6 +41,7 @@ impl DebugGadget
     {
         DebugGadget
         {
+            is_initted: false,
             isactive: false,
             enabled: false,
             has_acked: false,
@@ -87,6 +89,35 @@ pub fn debug_process_cmd()
     else if (command == "irqshow")
     {
         //irq_show();
+    }
+    else if (command == "proc")
+    {
+        if (args.len() < 1)
+        {
+            println!("Usage: proc <operation>");
+            println!("");
+            println!("Valid operations:");
+            println!(" - list: Lists all processes");
+        }
+        else
+        {
+            match args[0].as_str() {
+                "list" => {
+                    println!("Running Processes:");
+                    for pid in vsvc_get_pid_list()
+                    {
+                        if pid == 0xFF { continue; }
+
+                        println!("  {:3}: {}", pid, vsvc_get_pid_name(pid));
+                    }
+                    println!("");
+                },
+                _ => {
+                    println!("Unknown operation `{}`", args[0]);
+                }
+            };
+            
+        }
     }
     else if (command == "ttbr")
     {
@@ -208,6 +239,34 @@ fn debug_send_next(usbd: &mut UsbDevice)
     usbd.ep_tx(debug.if0_epBulkIn, to_u64ptr!(&copied[0]), to_send, false);
 }
 
+pub fn debug_send_byte(usbd: &mut UsbDevice, data: u8)
+{
+    let debug = get_debug();
+    
+    if (!debug.isactive) { return; }
+    
+    // Copy data to our own outbuf
+    {
+        let mut lock = debug.log_buf.lock();
+        let mut log_buf = lock.as_mut().unwrap();
+        
+        log_buf.push_back(data);
+    }
+}
+
+pub fn debug_flush(usbd: &mut UsbDevice)
+{
+    let debug = get_debug();
+    
+    if (!debug.isactive) { return; }
+    
+    // Begin a transfer here if ep is already idle, next transfer begins on success/fail/idle
+    if usbd.ep_status(debug.if0_epBulkIn) == UsbEpStatus::TxfrIdle
+    {
+        debug_send_next(usbd);
+    }
+}
+
 pub fn debug_send(usbd: &mut UsbDevice, data: &[u8])
 {
     let debug = get_debug();
@@ -230,11 +289,7 @@ pub fn debug_send(usbd: &mut UsbDevice, data: &[u8])
         }
     }
 
-    // Begin a transfer here if ep is already idle, next transfer begins on success/fail/idle
-    if usbd.ep_status(debug.if0_epBulkIn) == UsbEpStatus::TxfrIdle
-    {
-        debug_send_next(usbd);
-    }
+    debug_flush(usbd);
 }
 
 pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
@@ -421,9 +476,18 @@ pub fn debug_init()
 {
     let usbd = get_usbd();
     let debug = get_debug();
+
+    if debug.is_initted
+    {
+        debug_reset_hook(usbd);
+        return;
+    }
     
-    debug.log_buf = spin::Mutex::new(Some(VecDeque::new()));;
+    debug.is_initted = true;
     
+    debug.log_buf = spin::Mutex::new(Some(VecDeque::new()));
+    debug.cmd_buf = spin::Mutex::new(String::new());
+
     // We allocate two interfaces, one has an interrupt EP (unused?) 
     // and the other has two bulk endpoints for each direction
     debug.if0 = usbd.create_interface(2);

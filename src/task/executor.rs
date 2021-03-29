@@ -8,6 +8,7 @@ use super::{Task, TaskId};
 use alloc::{collections::BTreeMap, sync::Arc, task::Wake};
 use core::task::{Context, Poll, Waker};
 use crossbeam_queue::ArrayQueue;
+use crate::arm::ticks::*;
 
 pub struct Executor 
 {
@@ -44,6 +45,33 @@ impl Executor
     {
         self.run_ready_tasks();
     }
+    
+    pub fn clear_all(&mut self) 
+    {
+        // destructure `self` to avoid borrow checker errors
+        let Self {
+            tasks,
+            task_queue,
+            task_queue_next,
+            waker_cache,
+        } = self;
+
+        while let Ok(task_id) = task_queue.pop() 
+        {
+            let task = match tasks.get_mut(&task_id) 
+            {
+                Some(task) => task,
+                None => continue, // Task no longer exists
+            };
+
+            let waker = waker_cache
+                .entry(task_id)
+                .or_insert_with(|| TaskWaker::new(task_id, task_queue.clone()));
+
+            tasks.remove(&task_id);
+            waker_cache.remove(&task_id);
+        }
+    }
 
     fn run_ready_tasks(&mut self) 
     {
@@ -54,6 +82,8 @@ impl Executor
             task_queue_next,
             waker_cache,
         } = self;
+
+        let ticks_start = get_ticks();
 
         while let Ok(task_id) = task_queue.pop() 
         {
@@ -81,6 +111,11 @@ impl Executor
                     // Continue to poll these tasks on the next advance
                     task_queue_next.push(task_id).expect("queue full");
                 }
+            }
+            
+            // Try not to take too much time in here
+            if (get_ticks() - ticks_start > ns_to_ticks(10000)) {
+                break;
             }
         }
         

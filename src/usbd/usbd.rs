@@ -2153,7 +2153,7 @@ pub fn irq_usb()
     // A USB reset was requested
     if ((usbSts & USBSTS_USBRST) != 0)
     {
-        println!("usbd: reset requested");
+        println_uarta!("usbd: reset requested");
         usbd.halt_activity();
         
         // Run through reset handlers
@@ -2174,7 +2174,7 @@ pub fn irq_usb()
     // Cable was reinserted
     if ((usbSts & USBSTS_USBPORT) != 0)
     {
-        println!("usbd: cable reinserted");
+        println_uarta!("usbd: cable reinserted");
     }
     
     // Check for incoming setup packets and handle them
@@ -2202,16 +2202,16 @@ pub fn usbd_recover() -> UsbdError
     let mut ret: UsbdError = UsbdError::Success;
     let usbd = get_usbd();
     
-    println!("usbd: Begin init");
+    println_uarta!("usbd: Begin init");
     usbd.init();
     debug_init();
     //cdc_init();
     
-    println!("usbd: Begin init context");
+    println_uarta!("usbd: Begin init context");
     usbd.init_context();
     usbd.enable_clocks();
     usbd.init_controller();
-    println!("usbd: USB controller initialized...");
+    println_uarta!("usbd: USB controller initialized...");
     
     usbd.interrupt_en();
 

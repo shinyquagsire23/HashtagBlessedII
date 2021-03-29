@@ -84,6 +84,8 @@ drop_to_el1:
     
     ldr     x2, =(0x3c5 | (1<<21))     // EL1_SP1 | D | A | I | F | SS
     msr     spsr_el2, x2
+    
+    mov x0, x1
 
     eret
 
@@ -128,7 +130,7 @@ _disable_single_step:
 .global vttbr_apply
 vttbr_apply:
     ldr x2, =(0b001 << 16  | 0 << 14 | (1) << 6 | 0x1F) // TCR: 4GiB address size, 4KiB granule, SH0 inner sharable, ORGN0 "Normal memory, Outer Write-Back Read-Allocate Write-Allocate Cacheable.", IRGN0 "Normal memory, Inner Write-Back Read-Allocate Write-Allocate Cacheable."
-    ldr x3, =(1 << 31 /*| 1 << 30 */| 0 << 26 /*| 1 << 25/* | 1 << 21*/ | 1 << 19 /*| 1 << 14 | 1 << 13*/ | 0 << 10 | 0 << 5 | 0 << 4 | 0 << 3 | 0<<1 | 1 << 0) // TRVM, TGE, TVM, TTLB, TPU, TPC, TSW, TACR, TIDCP,
+    ldr x3, =(1 << 31 /*| 1 << 30 */| 1 << 26 /*| 1 << 25/* | 1 << 21*/ | 1 << 19 /*| 1 << 14 | 1 << 13*/ | 0 << 10 | 0 << 5 | 0 << 4 | 0 << 3 | 0<<1 | 1 << 0) // TRVM, TGE, TVM, TTLB, TPU, TPC, TSW, TACR, TIDCP,
     msr vttbr_el2, x0
     msr vtcr_el2, x2
     msr hcr_el2, x3

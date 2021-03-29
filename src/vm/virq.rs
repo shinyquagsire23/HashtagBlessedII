@@ -9,6 +9,7 @@ use crate::io::ictlr::*;
 use crate::arm::gic::*;
 use crate::arm::threading::*;
 use crate::arm::exceptions::*;
+use crate::arm::ticks::*;
 use crate::usbd::usbd::*;
 use crate::task::*;
 use crate::logger::*;
@@ -59,6 +60,19 @@ pub const GICH_INT_U:   u32 = (bit!(1)); // underflow
 pub const GICH_INT_EOI: u32 = (bit!(0)); // end of interrupt IRQ
 
 static mut IRQ_HEARTBEAT_DOWNSCALE: [u32; 8] = [0; 8];
+static mut LAST_TASKING: u64 = 0;
+static mut LAST_TASKING_MAX: u64 = 0;
+
+pub fn get_tasking_time() -> u64
+{
+    unsafe { return LAST_TASKING; }
+}
+
+pub fn get_tasking_time_max() -> u64
+{
+    unsafe { return LAST_TASKING_MAX; }
+}
+
 
 pub fn tegra_irq_is_sgi(irqnum: u16) -> bool
 {
@@ -119,12 +133,22 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
     {
         sysreg_write!("cnthp_ctl_el2", 3);
         
+        let start = get_ticks();
         //TODO better place this?
         if (get_core() == 0) {
             task_advance();
         }
+        let end = get_ticks();
+        let total_ticks = end - start;
+        unsafe 
+        { 
+            LAST_TASKING = ticks_to_ns(total_ticks);
+            if (LAST_TASKING > LAST_TASKING_MAX) {
+                LAST_TASKING_MAX = LAST_TASKING;
+            }
+        }
 
-        sysreg_write!("cnthp_tval_el2", 0x30000);
+        sysreg_write!("cnthp_tval_el2", 0x30000 - total_ticks);
         sysreg_write!("cnthp_ctl_el2", 1);
 
         unsafe

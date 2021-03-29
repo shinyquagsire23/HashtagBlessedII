@@ -17,6 +17,7 @@ use crate::task::*;
 use crate::task::svc_wait::*;
 use crate::task::svc_executor::*;
 use crate::logger::log_cmd;
+use alloc::vec::Vec;
 
 use alloc::boxed::Box;
 use async_trait::async_trait;
@@ -26,6 +27,7 @@ static mut RUNNING_PROCESS_NAME: BTreeMap<u32, String> = BTreeMap::new();
 static mut PROCESS_NAME_PID: BTreeMap<String, u32> = BTreeMap::new();
 static mut VSVC_QLAUNCH_STARTED: bool = false;
 static mut VSVC_TTBRS: BTreeMap<u32, u64> = BTreeMap::new();
+static mut VSVC_PROC_HANDLES: BTreeMap<u32, String> = BTreeMap::new();
 
 include!(concat!(env!("OUT_DIR"), "/vsvc_gen.rs"));
 
@@ -113,6 +115,14 @@ pub fn vsvc_get_curpid() -> u32
         let pid = (contextidr & 0xFF) as u32;
 
         return pid;
+    }
+}
+
+pub fn vsvc_get_pid_list() -> Vec<u32>
+{
+    unsafe
+    {
+        return RUNNING_PROCESS_NAME.keys().cloned().collect();
     }
 }
 
@@ -232,8 +242,8 @@ impl SvcHandler for SvcConnectToNamedPort
     {
         let port_name = str_from_null_terminated_utf8_u64ptr_unchecked(translate_el1_stage12(pre_ctx[1]));
 
-        println!("(core {}) svcConnectToNamedPort from `{}` for port {}", 
-                 get_core(), vsvc_get_curpid_name(), port_name);
+        println_core!("svcConnectToNamedPort from `{}` for port {}", 
+                 vsvc_get_curpid_name(), port_name);
         let port_name_str = String::from(port_name);
         
         //
@@ -253,8 +263,33 @@ impl SvcHandler for SvcBreak
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        println!("(core {}) process `{}` (pid {}) called svcBreak!", get_core(), vsvc_get_curpid_name(), vsvc_get_curpid());
+        println_core!("process `{}` (pid {}) called svcBreak!", vsvc_get_curpid_name(), vsvc_get_curpid());
 
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcOutputDebugString
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        let str_len = (pre_ctx[1] & 0xFFFFFFFF) as u32;
+        let debug_str = str_from_null_terminated_utf8_u64ptr_unchecked_len(translate_el1_stage12(pre_ctx[0]), str_len);
+        println_core!("svcOutputDebugString({}): {}", vsvc_get_curpid_name(), debug_str);
+        
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcSleepSystem
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        println_uarta!("svcSleepSystem({}) STUB", vsvc_get_curpid_name());
+        crate::io::timer::timer_wait(1000000);
+        
         return pre_ctx;
     }
 }
@@ -266,7 +301,14 @@ impl SvcHandler for SvcCreateProcess
     {
         let proc_name = str_from_null_terminated_utf8_u64ptr_unchecked(translate_el1_stage12(pre_ctx[1]));
 
-        println!("(core {}) svcCreateProcess -> {}", get_core(), proc_name);
+        //
+        // Wait for SVC to complete
+        //
+        let post_ctx = SvcWait::new(pre_ctx).await;
+        
+        let process_handle = (post_ctx[1] & 0xFFFFFFFF) as u32;
+        
+        println_core!("svcCreateProcess from `{}` -> {} (handle {:x})", vsvc_get_curpid_name(), proc_name, process_handle);
         unsafe
         {
             LAST_CREATED[get_core() as usize] = Some(String::from(proc_name));
@@ -275,7 +317,8 @@ impl SvcHandler for SvcCreateProcess
                 VSVC_QLAUNCH_STARTED = true;
             }
         }
-        return pre_ctx;
+
+        return post_ctx;
     }
 }
 
@@ -295,6 +338,72 @@ impl SvcHandler for SvcQueryMemory
                 }
             }
         }
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcExitProcess
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        unsafe
+        {
+            let pid = vsvc_get_curpid();
+            if RUNNING_PROCESS_NAME.contains_key(&pid)
+            {
+                if let Some(name) = RUNNING_PROCESS_NAME.get(&pid) {
+                    println_core!("svcExitProcess -> {}", name);
+                   PROCESS_NAME_PID.remove(name);
+                }
+        
+                RUNNING_PROCESS_NAME.remove(&pid);
+            }
+        }
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcStartProcess
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        let process_handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
+        println_core!("svcStartProcess from {} for handle {:x}", vsvc_get_curpid_name(), process_handle);
+        
+        unsafe
+        {
+            if let Some(proc_name) = &LAST_CREATED[get_core() as usize] {
+                VSVC_PROC_HANDLES.insert(process_handle, proc_name.clone());
+            }
+        }
+        
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcTerminateProcess
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
+        println_core!("svcTerminateProcess from {} for handle {:x}", vsvc_get_curpid_name(), handle);
+        
+        unsafe
+        {
+            if let Some(proc_name) = VSVC_PROC_HANDLES.remove(&handle) 
+            {
+                println!("    -> Terminated process {}", proc_name);
+                if let Some(pid) = PROCESS_NAME_PID.remove(&proc_name) {
+                    RUNNING_PROCESS_NAME.remove(&pid);
+                }
+            }
+        }
+        
+        // TODO check error?
+
         return pre_ctx;
     }
 }
