@@ -36,6 +36,7 @@ mod logger {
             crate::logger::logln($fmt);
         };
         ($fmt:expr, $($arg:tt)*) => {{
+            crate::logger::log(&format!("(core {}) ", crate::arm::threading::get_core()));
             let text = format!($fmt, $($arg)*);
             crate::logger::logln(&text);
         }};

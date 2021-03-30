@@ -29,6 +29,16 @@ impl HClientSession
         }
     }
     
+    pub fn new_from_parent(&self) -> Self
+    {
+        HClientSession
+        {
+            parent_port_pid: self.parent_port_pid,
+            client_pid: self.client_pid,
+            handler: None
+        }
+    }
+    
     pub fn set_handler(&mut self, handler: HClientSessionHandler)
     {
         self.handler = Some(handler);

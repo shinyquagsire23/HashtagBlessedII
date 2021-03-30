@@ -459,18 +459,26 @@ impl SvcHandler for SvcSendSyncRequest
     {
         let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
         
+        let pkt = hipc_get_packet();
+        if pkt.is_domain()
+        {
+            //TODO pain
+            return pre_ctx;
+        }
+        
         // Get port struct
         let mut handler_opt: Option<HClientSessionHandler> = None;
         if let Some(mut hsession) = hipc_get_handle_clientsession(handle)
         {
             let hsession_locked = hsession.lock();
 
-            println_core!("svcSendSyncRequest from `{}` to handle {:x}", vsvc_get_curpid_name(), handle);
-            println!("          `{}` -> `{}`", vsvc_get_curpid_name(), vsvc_get_pid_name(hsession_locked.parent_port_pid as u32));
+            //println_core!("svcSendSyncRequest from `{}` to handle {:x}", vsvc_get_curpid_name(), handle);
+            //println!("          `{}` -> `{}`", vsvc_get_curpid_name(), vsvc_get_pid_name(hsession_locked.parent_port_pid as u32));
             
             handler_opt = hsession_locked.get_handler();
         }
         
+        // If there's a handler, let it take over
         if let Some(handler) = handler_opt
         {
             return handler(pre_ctx).await;

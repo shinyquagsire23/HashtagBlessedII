@@ -17,6 +17,7 @@ use super::hport::HPort;
 use super::hclientsession::HClientSession;
 use alloc::string::String;
 use spin::mutex::Mutex;
+use core::str;
 
 pub const MAGIC_SFCI: u32 = 0x49434653;
 pub const MAGIC_SFCO: u32 = 0x4F434653;
@@ -143,7 +144,7 @@ impl HIPCDomainPayload
         let buf_data = buf + 16;
         let data = HIPCDataPayload::unpack(buf_data, buf_size-0x10);
         
-        let mut objs: Vec<u32> = Vec::new();
+        let mut objs: Vec<u32> = Vec::with_capacity(num_objs as usize);
         for i in 0..num_objs
         {
             objs.push(peek32(buf_objs));
@@ -165,6 +166,36 @@ impl HIPCDomainPayload
     pub fn packed_size(&self) -> u64
     {
         16 + self.data_size as u64 + ((self.num_objs as u64) * 4)
+    }
+    
+    pub fn get_cmd_id(&self) -> u32
+    {
+        self.data.command
+    }
+    
+    pub fn read_u8(&self, offs: usize) -> u8
+    {
+        self.data.read_u8(offs)
+    }
+    
+    pub fn read_u16(&self, offs: usize) -> u16
+    {
+        self.data.read_u16(offs)
+    }
+    
+    pub fn read_u32(&self, offs: usize) -> u32
+    {
+        self.data.read_u32(offs)
+    }
+    
+    pub fn read_u64(&self, offs: usize) -> u64
+    {
+        self.data.read_u64(offs)
+    }
+    
+    pub fn read_str(&self, offs: usize) -> String
+    {
+        self.data.read_str(offs)
     }
     
     pub fn print(&self)
@@ -200,7 +231,7 @@ impl HIPCDataPayload
     pub fn unpack(buf: u64, data_size: u16) -> HIPCDataPayload
     {
         let mut buf_data = buf + 16;
-        let mut data: Vec<u8> = Vec::new();
+        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
         for i in 0..data_size
         {
             data.push(peek8(buf_data));
@@ -221,6 +252,63 @@ impl HIPCDataPayload
     {
         16 + self.data.len() as u64
     }
+    
+    pub fn get_cmd_id(&self) -> u32
+    {
+        self.command
+    }
+    
+    pub fn read_u8(&self, offs: usize) -> u8
+    {
+        self.data[offs]
+    }
+    
+    pub fn read_u16(&self, offs: usize) -> u16
+    {
+        let mut bytes: [u8; 2] = [0;2];
+        for i in offs..offs+2
+        {
+            bytes[i] = self.data[i];
+        }
+        u16::from_le_bytes(bytes)
+    }
+    
+    pub fn read_u32(&self, offs: usize) -> u32
+    {
+        let mut bytes: [u8; 4] = [0;4];
+        for i in offs..offs+4
+        {
+            bytes[i] = self.data[i];
+        }
+        u32::from_le_bytes(bytes)
+    }
+    
+    pub fn read_u64(&self, offs: usize) -> u64
+    {
+        let mut bytes: [u8; 8] = [0;8];
+        for i in offs..offs+8
+        {
+            bytes[i] = self.data[i];
+        }
+        u64::from_le_bytes(bytes)
+    }
+    
+    pub fn read_str(&self, offs: usize) -> String
+    {
+        let mut bytes: [u8; 4] = [0;4];
+        let mut s_len = 0;
+        for i in offs..self.data.len()
+        {
+            if self.data[i] == 0
+            {
+                break;
+            }
+            s_len += 1;
+        }
+        unsafe { String::from(str::from_utf8_unchecked(&self.data[offs..s_len])) }
+    }
+    
+    
     
     pub fn print(&self)
     {
@@ -262,7 +350,7 @@ impl HIPCHandleDesc
             buf_inc += 4;
         }
 
-        let mut copy_handles: Vec<u32> = Vec::new();
+        let mut copy_handles: Vec<u32> = Vec::with_capacity(num_copy as usize);
         for i in 0..num_copy
         {
             let handle = peek32(buf_inc);
@@ -270,7 +358,7 @@ impl HIPCHandleDesc
             copy_handles.push(handle);
         }
         
-        let mut move_handles: Vec<u32> = Vec::new();
+        let mut move_handles: Vec<u32> = Vec::with_capacity(num_move as usize);
         for i in 0..num_move
         {
             let handle = peek32(buf_inc);
@@ -299,6 +387,19 @@ impl HIPCHandleDesc
         ret_size += (4 * self.num_move);
 
         return ret_size as u64;
+    }
+    
+    pub fn get_handle(&self, idx: usize) -> Option<u32>
+    {
+        if idx < self.copy_handles.len()
+        {
+            return Some(self.copy_handles[idx]);
+        }
+        else if idx - self.copy_handles.len() < self.move_handles.len()
+        {
+            return Some(self.move_handles[idx - self.copy_handles.len()]);
+        }
+        return None;
     }
     
     pub fn print(&self)
@@ -450,7 +551,7 @@ impl HIPCPacket
         }
         
         // Unpack Static descriptors
-        let mut static_descs: Vec<HIPCStaticDesc> = Vec::new();
+        let mut static_descs: Vec<HIPCStaticDesc> = Vec::with_capacity(num_static as usize);
         for i in 0..num_static
         {
             let unpack_static: HIPCStaticDesc = HIPCStaticDesc::unpack(read_ptr);
@@ -460,7 +561,7 @@ impl HIPCPacket
         }
         
         // Unpack Send descriptors
-        let mut send_descs: Vec<HIPCSendRecvExchDesc> = Vec::new();
+        let mut send_descs: Vec<HIPCSendRecvExchDesc> = Vec::with_capacity(num_send as usize);
         for i in 0..num_send
         {
             let unpack_desc: HIPCSendRecvExchDesc = HIPCSendRecvExchDesc::unpack(read_ptr);
@@ -470,7 +571,7 @@ impl HIPCPacket
         }
         
         // Unpack Recv descriptors
-        let mut recv_descs: Vec<HIPCSendRecvExchDesc> = Vec::new();
+        let mut recv_descs: Vec<HIPCSendRecvExchDesc> = Vec::with_capacity(num_recv as usize);
         for i in 0..num_recv
         {
             let unpack_desc: HIPCSendRecvExchDesc = HIPCSendRecvExchDesc::unpack(read_ptr);
@@ -480,7 +581,7 @@ impl HIPCPacket
         }
         
         // Unpack Exchange descriptors
-        let mut exch_descs: Vec<HIPCSendRecvExchDesc> = Vec::new();
+        let mut exch_descs: Vec<HIPCSendRecvExchDesc> = Vec::with_capacity(num_exch as usize);
         for i in 0..num_exch
         {
             let unpack_desc: HIPCSendRecvExchDesc = HIPCSendRecvExchDesc::unpack(read_ptr);
@@ -527,6 +628,105 @@ impl HIPCPacket
             exch_descs: exch_descs,
             data_payload: hipc_payload,
         }
+    }
+    
+    pub fn is_domain(&self) -> bool
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                false
+            },
+            HIPCPayload::Domain(domain) => {
+                true
+            }
+        }
+    }
+    
+    pub fn get_cmd_id(&self) -> u32
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.get_cmd_id()
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.get_cmd_id()
+            }
+        }
+    }
+    
+    pub fn read_u8(&self, offs: usize) -> u8
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.read_u8(offs)
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.read_u8(offs)
+            }
+        }
+    }
+    
+    pub fn read_u16(&self, offs: usize) -> u16
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.read_u16(offs)
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.read_u16(offs)
+            }
+        }
+    }
+    
+    pub fn read_u32(&self, offs: usize) -> u32
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.read_u32(offs)
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.read_u32(offs)
+            }
+        }
+    }
+    
+    pub fn read_u64(&self, offs: usize) -> u64
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.read_u64(offs)
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.read_u64(offs)
+            }
+        }
+    }
+    
+    pub fn read_str(&self, offs: usize) -> String
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.read_str(offs)
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.read_str(offs)
+            }
+        }
+    }
+    
+    pub fn get_handle(&self, idx: usize) -> Option<u32>
+    {
+        if let Some(desc) = &self.handle_desc {
+            return desc.get_handle(idx);
+        }
+        return None;
     }
     
     pub fn pack(&self)
