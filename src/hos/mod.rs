@@ -8,3 +8,6 @@ pub mod hipc;
 pub mod kernel;
 pub mod smc;
 pub mod svc;
+pub mod hhandle;
+pub mod hport;
+pub mod hclientsession;

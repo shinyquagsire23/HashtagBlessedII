@@ -49,6 +49,11 @@ mod util {
             sysreg_write!($a, sysreg_read!($a) & ($b))
         }
     }
+    macro_rules! kstr {
+        ($a:expr) => {
+            (str_from_null_terminated_utf8_u64ptr_unchecked(crate::arm::mmu::translate_el1_stage12($a)))
+        }
+    }
 }
 
 pub fn str_from_null_terminated_utf8_u64ptr_unchecked(s: u64) -> &'static str {

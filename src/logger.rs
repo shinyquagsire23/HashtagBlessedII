@@ -19,6 +19,7 @@ use crate::task::sleep::*;
 use crate::arm::ticks::*;
 use crate::util::*;
 use crate::arm::threading::*;
+use alloc::vec::Vec;
 
 static LOGGER_MUTEX: [spin::Mutex<()>; 8] = [spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(()), spin::Mutex::new(())];
 
@@ -431,6 +432,23 @@ pub fn hexdump(prefix: &str, addr: u64, len: usize)
     for i in 0..len
     {
         let byte = peek8(addr + i as u64);
+        
+        if (i != 0 && (i % 16) == 0)
+        {
+            println!("");
+        }
+        
+        print!(" {:02x}", byte);
+    }
+    println!("");
+}
+
+pub fn hexdump_vec(prefix: &str, data: &Vec<u8>)
+{
+    println!("{}:", prefix);
+    for i in 0..data.len()
+    {
+        let byte = data[i];
         
         if (i != 0 && (i % 16) == 0)
         {

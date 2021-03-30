@@ -59,3 +59,8 @@ pub fn wfe()
         asm!("wfe");
     }
 }
+
+#[inline(always)]
+pub fn get_tls_el0() -> u64 {
+    sysreg_read!("tpidrro_el0") as u64
+}

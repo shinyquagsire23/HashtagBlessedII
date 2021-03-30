@@ -6,6 +6,16 @@
 
 use alloc::vec::Vec;
 use crate::util::*;
+use crate::arm::threading::get_tls_el0;
+use crate::arm::mmu::translate_el1_stage12;
+use crate::logger::*;
+use crate::vm::vsvc::vsvc_get_curpid;
+use alloc::{collections::BTreeMap, sync::Arc};
+use core::cmp::{Ordering, Eq};
+use super::hhandle::HHandle;
+use super::hport::HPort;
+use super::hclientsession::HClientSession;
+use alloc::string::String;
 
 pub const MAGIC_SFCI: u32 = 0x49434653;
 pub const MAGIC_SFCO: u32 = 0x4F434653;
@@ -30,6 +40,197 @@ enum HIPCDomainCommand : u8
     HIPCDomainCommand_Send = 1,
     HIPCDomainCommand_CloseVirtualHandle = 2,
 };*/
+
+static mut HANDLE_TO_CLIENTSESSION: BTreeMap<HHandle, Arc<HClientSession>> = BTreeMap::new();
+static mut HANDLE_TO_SERVERPORT: BTreeMap<HHandle, Arc<HPort>> = BTreeMap::new();
+static mut NAME_TO_SERVERPORT: BTreeMap<String, Arc<HPort>> = BTreeMap::new();
+
+pub fn hipc_register_handle_serverport(handle: u32, port: Arc<HPort>)
+{
+    unsafe
+    {
+        HANDLE_TO_SERVERPORT.insert(HHandle::from_curpid(handle), port.clone());
+        if let Some(name) = &port.name
+        {
+            NAME_TO_SERVERPORT.insert(name.clone(), port);
+        }
+    }
+}
+
+pub fn hipc_get_handle_serverport(handle: u32) -> Option<Arc<HPort>>
+{
+    unsafe
+    {
+        let hhandle = HHandle::from_curpid(handle);
+        if let Some(arc_res) = HANDLE_TO_SERVERPORT.get(&hhandle)
+        {
+            return Some(arc_res.clone());
+        }
+        return None;
+    }
+}
+
+pub fn hipc_get_named_serverport(name: String) -> Option<Arc<HPort>>
+{
+    unsafe
+    {
+        if let Some(arc_res) = NAME_TO_SERVERPORT.get(&name)
+        {
+            return Some(arc_res.clone());
+        }
+        return None;
+    }
+}
+
+pub fn hipc_register_handle_clientsession(handle: u32, session: Arc<HClientSession>)
+{
+    unsafe
+    {
+        HANDLE_TO_CLIENTSESSION.insert(HHandle::from_curpid(handle), session);
+    }
+}
+
+pub fn hipc_get_handle_clientsession(handle: u32) -> Option<Arc<HClientSession>>
+{
+    unsafe
+    {
+        let hhandle = HHandle::from_curpid(handle);
+        if let Some(arc_handle) = HANDLE_TO_CLIENTSESSION.get(&hhandle)
+        {
+            return Some(arc_handle.clone());
+        }
+        return None;
+    }
+}
+
+enum HIPCPayload
+{
+    Domain(HIPCDomainPayload),
+    Session(HIPCDataPayload)
+}
+
+pub struct HIPCDomainPayload
+{
+    cmd: u8,
+    num_objs: u8,
+    data_size: u16,
+    obj_id: u32,
+    token: u32,
+    data: HIPCDataPayload,
+    objs: Vec<u32>,
+}
+
+impl HIPCDomainPayload
+{
+    pub fn unpack(buf: u64, buf_size: u16) -> HIPCDomainPayload
+    {
+        let word0 = peek32(buf);
+        
+        let cmd = (word0 & 0xFF) as u8;
+        let num_objs = ((word0 >> 8) & 0xFF) as u8;
+        let data_size = ((word0 >> 16) & 0xFFFF) as u16;
+        
+        // TODO verify buf_size
+        
+        let obj_id = peek32(buf + 4);
+        let pad = peek32(buf + 8);
+        let token = peek32(buf + 12);
+        
+        let mut buf_objs = buf + 16 + (data_size as u64);
+        
+        let buf_data = buf + 16;
+        let data = HIPCDataPayload::unpack(buf_data, buf_size-0x10);
+        
+        let mut objs: Vec<u32> = Vec::new();
+        for i in 0..num_objs
+        {
+            objs.push(peek32(buf_objs));
+            buf_objs += 4;
+        }
+        
+        HIPCDomainPayload
+        {
+            cmd: cmd,
+            num_objs: num_objs,
+            data_size: data_size,
+            obj_id: obj_id,
+            token: token,
+            data: data,
+            objs: objs
+        }
+    }
+    
+    pub fn packed_size(&self) -> u64
+    {
+        16 + self.data_size as u64 + ((self.num_objs as u64) * 4)
+    }
+    
+    pub fn print(&self)
+    {
+        println!("Domain Payload:");
+        println!("  Cmd: {}", self.cmd);
+        println!("  Num Objs: {}", self.num_objs);
+        println!("  Data Size: {}", self.data_size);
+        println!("  Obj Id: {}", self.obj_id);
+        println!("  Token: {}", self.token);
+        
+        self.data.print();
+        
+        println!("Domain Objs:");
+        for obj in &self.objs
+        {
+            println!("  {}", obj);
+        }
+    }
+}
+
+pub struct HIPCDataPayload
+{
+    magic: u32,
+    version: u32,
+    command: u32, // also error
+    token: u32,
+    data: Vec<u8>,
+}
+
+impl HIPCDataPayload
+{
+    pub fn unpack(buf: u64, data_size: u16) -> HIPCDataPayload
+    {
+        let mut buf_data = buf + 16;
+        let mut data: Vec<u8> = Vec::new();
+        for i in 0..data_size
+        {
+            data.push(peek8(buf_data));
+            buf_data += 1;
+        }
+        
+        HIPCDataPayload
+        {
+            magic: peek32(buf),
+            version: peek32(buf + 4),
+            command: peek32(buf + 8),
+            token: peek32(buf + 12),
+            data: data
+        }
+    }
+    
+    pub fn packed_size(&self) -> u64
+    {
+        16 + self.data.len() as u64
+    }
+    
+    pub fn print(&self)
+    {
+        println!("Data Payload:");
+        println!("  Magic: {:x}", self.magic);
+        println!("  Version: {}", self.version);
+        println!("  Command/Error: {:x}", self.command);
+        println!("  Token: {:x}", self.token);
+        hexdump_vec("Data Buf", &self.data);
+        // TODO data hexdump
+    }
+}
 
 pub struct HIPCHandleDesc
 {
@@ -96,6 +297,11 @@ impl HIPCHandleDesc
         ret_size += (4 * self.num_move);
 
         return ret_size as u64;
+    }
+    
+    pub fn print(&self)
+    {
+        
     }
 }
 
@@ -193,7 +399,7 @@ pub struct HIPCPacket
     send_descs: Vec<HIPCSendRecvExchDesc>,
     recv_descs: Vec<HIPCSendRecvExchDesc>,
     exch_descs: Vec<HIPCSendRecvExchDesc>,
-    raw_data: Vec<u8>
+    data_payload: HIPCPayload,
 }
 
 impl HIPCPacket
@@ -213,7 +419,7 @@ impl HIPCPacket
         let recv_static_flags = ((word1 >> 10) & 0xF) as u8;
         let unk1 = ((word1 >> 14) & 0x7F) as u8;
         let unk2 = ((word1 >> 21) & 0x3FF) as u16;
-        let enable_handle = (((word1 >> 30) & 1) != 0);
+        let enable_handle = ((word1 & bit!(31)) != 0);
         
         let mut read_ptr = cmd_buf + 8;
         
@@ -267,12 +473,23 @@ impl HIPCPacket
             exch_descs.push(unpack_desc);
         }
         
-        read_ptr = (((read_ptr + 4 /* sizeof(u32) */ * 2) + 0xF) & !0xF) - 0x8; // align to 0x10
-        let mut raw_data: Vec<u8> = Vec::new();
-        for i in 0..data_size
+        let hipc_payload: HIPCPayload;
+
+        read_ptr = ((read_ptr + 0xF) & !0xF); // align to 0x10
+        let magic = peek32(read_ptr);
+        if magic == MAGIC_SFCI || magic == MAGIC_SFCO
         {
-            raw_data.push(peek8(read_ptr));
-            read_ptr += 1;
+            let payload = HIPCDataPayload::unpack(read_ptr, data_size * 4);
+            read_ptr += payload.packed_size();
+            
+            hipc_payload = HIPCPayload::Session(payload);
+        }
+        else
+        {
+            let payload = HIPCDomainPayload::unpack(read_ptr, data_size * 4);
+            read_ptr += payload.packed_size();
+            
+            hipc_payload = HIPCPayload::Domain(payload);
         }
 
         HIPCPacket
@@ -292,12 +509,44 @@ impl HIPCPacket
             send_descs: send_descs,
             recv_descs: recv_descs,
             exch_descs: exch_descs,
-            raw_data: raw_data,
+            data_payload: hipc_payload,
         }
     }
     
-    pub fn pack()
+    pub fn pack(&self)
     {
         
     }
+    
+    pub fn print(&self)
+    {
+        println!("HIPCPacket:");
+        println!("  Type: {}", self.pkt_type);
+        println!("  Num Static: {}", self.num_static);
+        println!("  Num Send: {}", self.num_send);
+        println!("  Num Recv: {}", self.num_recv);
+        println!("  Data Size: {}", self.data_size);
+        println!("  RecvStatic Flags: {}", self.recv_static_flags);
+        println!("  Enable Handle: {}", self.enable_handle);
+
+        if let Some(desc) = &self.handle_desc {
+            println!("Handle Desc:");
+            desc.print();
+        }
+
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.print();
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.print();
+            }
+        }
+    }
+}
+
+pub fn hipc_get_packet() -> HIPCPacket
+{
+    HIPCPacket::unpack(translate_el1_stage12(get_tls_el0()))
 }
