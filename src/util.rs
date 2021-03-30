@@ -54,6 +54,12 @@ mod util {
             (str_from_null_terminated_utf8_u64ptr_unchecked(crate::arm::mmu::translate_el1_stage12($a)))
         }
     }
+    
+    macro_rules! kstr_len {
+        ($a:expr, $b:expr) => {
+            (str_from_null_terminated_utf8_u64ptr_unchecked_len(crate::arm::mmu::translate_el1_stage12($a), $b))
+        }
+    }
 }
 
 pub fn str_from_null_terminated_utf8_u64ptr_unchecked(s: u64) -> &'static str {

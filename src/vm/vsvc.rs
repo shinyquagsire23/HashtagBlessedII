@@ -6,7 +6,7 @@
 
 use crate::arm::exceptions::*;
 use crate::arm::threading::*;
-use crate::arm::mmu::*;
+use crate::arm::mmu::translate_el1_stage12;
 use crate::vm::funcs::*;
 use crate::hos::svc::*;
 use alloc::collections::btree_map::BTreeMap;
@@ -18,7 +18,10 @@ use crate::task::svc_wait::*;
 use crate::task::svc_executor::*;
 use crate::logger::log_cmd;
 use alloc::vec::Vec;
-use crate::hos::{hipc::*, hport::HPort, hhandle::HHandle, hclientsession::HClientSession};
+use core::{future::Future, pin::Pin};
+use crate::hos::{hipc::*, hport::HPort, hhandle::HHandle, hclientsession::HClientSession, hclientsession::HClientSessionHandler};
+use spin::mutex::Mutex;
+use crate::modules::ipc::ipc_hook_namedport;
 
 use alloc::boxed::Box;
 use async_trait::async_trait;
@@ -258,7 +261,7 @@ impl SvcHandler for SvcManageNamedPort
         let port_handle = (post_ctx[1] & 0xFFFFFFFF) as u32;
         
         let hport = HPort::from_curpid(Some(port_name_str));
-        hipc_register_handle_serverport(port_handle, Arc::new(hport));
+        hipc_register_handle_serverport(port_handle, Arc::new(Mutex::new(hport)));
         
         //println!("Got session handle {:08x} for port {}", session_handle, port_name_str);
         return post_ctx;
@@ -282,15 +285,8 @@ impl SvcHandler for SvcConnectToNamedPort
         //
         let post_ctx = SvcWait::new(pre_ctx).await;
         
-        // Get port struct
-        if let Some(hport) = hipc_get_named_serverport(port_name_str)
-        {
-            let hsession = hport.create_session();
-        
-            let session_handle = (post_ctx[1] & 0xFFFFFFFF) as u32;
-        
-            hipc_register_handle_clientsession(session_handle, Arc::new(hsession));
-        }
+        let session_handle = (post_ctx[1] & 0xFFFFFFFF) as u32;
+        ipc_hook_namedport(&port_name_str, session_handle);
         
         //println!("Got session handle {:08x} for port {}", session_handle, port_name_str);
         return post_ctx;
@@ -314,7 +310,7 @@ impl SvcHandler for SvcOutputDebugString
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
         let str_len = (pre_ctx[1] & 0xFFFFFFFF) as u32;
-        let debug_str = str_from_null_terminated_utf8_u64ptr_unchecked_len(translate_el1_stage12(pre_ctx[0]), str_len);
+        let debug_str = kstr_len!(pre_ctx[0], str_len);
         println_core!("svcOutputDebugString({}): {}", vsvc_get_curpid_name(), debug_str);
         
         return pre_ctx;
@@ -338,7 +334,7 @@ impl SvcHandler for SvcCreateProcess
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        let proc_name = str_from_null_terminated_utf8_u64ptr_unchecked(translate_el1_stage12(pre_ctx[1]));
+        let proc_name = kstr!(pre_ctx[1]);
 
         //
         // Wait for SVC to complete
@@ -464,13 +460,20 @@ impl SvcHandler for SvcSendSyncRequest
         let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
         
         // Get port struct
-        if let Some(hsession) = hipc_get_handle_clientsession(handle)
+        let mut handler_opt: Option<HClientSessionHandler> = None;
+        if let Some(mut hsession) = hipc_get_handle_clientsession(handle)
         {
+            let hsession_locked = hsession.lock();
+
             println_core!("svcSendSyncRequest from `{}` to handle {:x}", vsvc_get_curpid_name(), handle);
-            println!("          `{}` -> `{}`", vsvc_get_curpid_name(), vsvc_get_pid_name(hsession.parent_port_pid as u32));
+            println!("          `{}` -> `{}`", vsvc_get_curpid_name(), vsvc_get_pid_name(hsession_locked.parent_port_pid as u32));
             
-            let pkt = hipc_get_packet();
-            //pkt.print();
+            handler_opt = hsession_locked.get_handler();
+        }
+        
+        if let Some(handler) = handler_opt
+        {
+            return handler(pre_ctx).await;
         }
         
         //panic!("asdf");

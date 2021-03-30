@@ -16,6 +16,7 @@ use super::hhandle::HHandle;
 use super::hport::HPort;
 use super::hclientsession::HClientSession;
 use alloc::string::String;
+use spin::mutex::Mutex;
 
 pub const MAGIC_SFCI: u32 = 0x49434653;
 pub const MAGIC_SFCO: u32 = 0x4F434653;
@@ -41,23 +42,24 @@ enum HIPCDomainCommand : u8
     HIPCDomainCommand_CloseVirtualHandle = 2,
 };*/
 
-static mut HANDLE_TO_CLIENTSESSION: BTreeMap<HHandle, Arc<HClientSession>> = BTreeMap::new();
-static mut HANDLE_TO_SERVERPORT: BTreeMap<HHandle, Arc<HPort>> = BTreeMap::new();
-static mut NAME_TO_SERVERPORT: BTreeMap<String, Arc<HPort>> = BTreeMap::new();
+static mut HANDLE_TO_CLIENTSESSION: BTreeMap<HHandle, Arc<Mutex<HClientSession>>> = BTreeMap::new();
+static mut HANDLE_TO_SERVERPORT: BTreeMap<HHandle, Arc<Mutex<HPort>>> = BTreeMap::new();
+static mut NAME_TO_SERVERPORT: BTreeMap<String, Arc<Mutex<HPort>>> = BTreeMap::new();
 
-pub fn hipc_register_handle_serverport(handle: u32, port: Arc<HPort>)
+pub fn hipc_register_handle_serverport(handle: u32, port: Arc<Mutex<HPort>>)
 {
     unsafe
     {
+        let name = port.lock().name.clone();
         HANDLE_TO_SERVERPORT.insert(HHandle::from_curpid(handle), port.clone());
-        if let Some(name) = &port.name
+        if let Some(name) = &name
         {
             NAME_TO_SERVERPORT.insert(name.clone(), port);
         }
     }
 }
 
-pub fn hipc_get_handle_serverport(handle: u32) -> Option<Arc<HPort>>
+pub fn hipc_get_handle_serverport(handle: u32) -> Option<Arc<Mutex<HPort>>>
 {
     unsafe
     {
@@ -70,11 +72,11 @@ pub fn hipc_get_handle_serverport(handle: u32) -> Option<Arc<HPort>>
     }
 }
 
-pub fn hipc_get_named_serverport(name: String) -> Option<Arc<HPort>>
+pub fn hipc_get_named_serverport(name: &String) -> Option<Arc<Mutex<HPort>>>
 {
     unsafe
     {
-        if let Some(arc_res) = NAME_TO_SERVERPORT.get(&name)
+        if let Some(arc_res) = NAME_TO_SERVERPORT.get(name)
         {
             return Some(arc_res.clone());
         }
@@ -82,7 +84,7 @@ pub fn hipc_get_named_serverport(name: String) -> Option<Arc<HPort>>
     }
 }
 
-pub fn hipc_register_handle_clientsession(handle: u32, session: Arc<HClientSession>)
+pub fn hipc_register_handle_clientsession(handle: u32, session: Arc<Mutex<HClientSession>>)
 {
     unsafe
     {
@@ -90,7 +92,7 @@ pub fn hipc_register_handle_clientsession(handle: u32, session: Arc<HClientSessi
     }
 }
 
-pub fn hipc_get_handle_clientsession(handle: u32) -> Option<Arc<HClientSession>>
+pub fn hipc_get_handle_clientsession(handle: u32) -> Option<Arc<Mutex<HClientSession>>>
 {
     unsafe
     {
@@ -301,7 +303,21 @@ impl HIPCHandleDesc
     
     pub fn print(&self)
     {
-        
+        println!("Handle Desc:");
+        if self.send_pid
+        {
+            println!("  PID: {}", self.pid);
+        }
+        println!("  Copied ({}):", self.num_copy);
+        for i in 0..(self.num_copy as usize)
+        {
+            println!("    {:x}", self.copy_handles[i]);
+        }
+        println!("  Moved  ({}):", self.num_move);
+        for i in 0..(self.num_move as usize)
+        {
+            println!("    {:x}", self.move_handles[i]);
+        }
     }
 }
 
@@ -530,7 +546,6 @@ impl HIPCPacket
         println!("  Enable Handle: {}", self.enable_handle);
 
         if let Some(desc) = &self.handle_desc {
-            println!("Handle Desc:");
             desc.print();
         }
 
