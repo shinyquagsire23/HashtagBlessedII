@@ -8,7 +8,7 @@ use core::{future::Future, pin::Pin};
 use crate::hos::{hport::HPort, hhandle::HHandle, hclientsession::HClientSession, hclientsession::HClientSessionHandler};
 use spin::mutex::Mutex;
 use crate::hos::hipc::{PKT_TYPE_INVALID, PKT_TYPE_LEGACYREQEST, PKT_TYPE_CLOSE, PKT_TYPE_LEGACYCONTROL, PKT_TYPE_REQUEST, PKT_TYPE_CONTROL, PKT_TYPE_REQUESTWITHCONTEXT, PKT_TYPE_CONTROLWITHCONTEXT, DOMAIN_CMD_SEND, DOMAIN_CMD_CLOSEOBJ};
-use crate::hos::hipc::{hipc_get_handle_clientsession, hipc_get_named_serverport, hipc_register_handle_clientsession, hipc_get_packet, hipc_close_handle, hipc_register_domain, hipc_remove_domain, hipc_get_domain_session};
+use crate::hos::hipc::{HObject, HObjectExtra, hipc_get_handle_clientsession, hipc_get_named_serverport, hipc_register_handle_clientsession, hipc_get_packet, hipc_close_handle, hipc_register_domain, hipc_remove_domain, hipc_get_domain_session};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::collections::BTreeMap;
@@ -45,7 +45,7 @@ pub fn ipc_get_handler(service_name: String) -> Option<HClientSessionHandler>
     }
 }
 
-async fn handle_sm(mut pre_ctx: [u64; 32]) -> [u64; 32]
+async fn handle_sm(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
 {
     let pkt = hipc_get_packet();
     //pkt.print();
@@ -109,8 +109,8 @@ async fn handle_sm(mut pre_ctx: [u64; 32]) -> [u64; 32]
     return pre_ctx;
 }
 
-fn handle_sm_boxed(mut pre_ctx: [u64; 32]) -> Pin<Box<dyn Future<Output = [u64; 32]> + Send>> {
-    Box::pin(handle_sm(pre_ctx))
+fn handle_sm_boxed(mut pre_ctx: [u64; 32], hobj: HObject) -> Pin<Box<dyn Future<Output = [u64; 32]> + Send>> {
+    Box::pin(handle_sm(pre_ctx, hobj))
 }
 
 pub fn ipc_hook_namedport(port_name_str: &String, session_handle: u32)
@@ -184,6 +184,7 @@ pub async fn ipc_handle_syncrequest_control(mut pre_ctx: [u64; 32]) -> [u64; 32]
                     let mut service_hsession = hsession.lock().new_from_parent();
                 
                     service_hsession.set_handler(handler);
+                    service_hsession.set_extra(hsession.lock().get_extra());
                 
                     // Link new HClientSession to HOS handle
                     hipc_register_handle_clientsession(session_handle, Arc::new(Mutex::new(service_hsession)));
@@ -208,6 +209,8 @@ pub async fn ipc_handle_syncrequest_control(mut pre_ctx: [u64; 32]) -> [u64; 32]
                 if let Some(handler) = hsession.lock().get_handler() {
                     service_hsession.set_handler(handler);
                 }
+                
+                service_hsession.set_extra(hsession.lock().get_extra());
             
                 // Link new HClientSession to HOS handle
                 hipc_register_handle_clientsession(session_handle, Arc::new(Mutex::new(service_hsession)));
@@ -242,8 +245,10 @@ pub async fn ipc_handle_syncrequest(mut pre_ctx: [u64; 32]) -> [u64; 32]
                     1 => // Request
                     {
                         let mut handler_opt: Option<HClientSessionHandler> = None;
+                        let mut hobj: HObject = HObject::None();
                         if let Some(mut hsession) = hipc_get_domain_session(HDomainObj::from_curpid(handle, obj))
                         {
+                            hobj = HObject::DomainSession(hsession.clone());
                             let hsession_locked = hsession.lock();
 
                             handler_opt = hsession_locked.get_handler();
@@ -252,7 +257,7 @@ pub async fn ipc_handle_syncrequest(mut pre_ctx: [u64; 32]) -> [u64; 32]
                         // If there's a handler, let it take over
                         if let Some(handler) = handler_opt
                         {
-                            return handler(pre_ctx).await;
+                            return handler(pre_ctx, hobj).await;
                         }
                     },
                     2 => // Delete
@@ -267,8 +272,10 @@ pub async fn ipc_handle_syncrequest(mut pre_ctx: [u64; 32]) -> [u64; 32]
             {
                 // Get port struct
                 let mut handler_opt: Option<HClientSessionHandler> = None;
+                let mut hobj: HObject = HObject::None();
                 if let Some(mut hsession) = hipc_get_handle_clientsession(handle)
                 {
+                    hobj = HObject::ClientSession(hsession.clone());
                     let hsession_locked = hsession.lock();
 
                     //println_core!("svcSendSyncRequest from `{}` to handle {:x}", vsvc_get_curpid_name(), handle);
@@ -280,7 +287,7 @@ pub async fn ipc_handle_syncrequest(mut pre_ctx: [u64; 32]) -> [u64; 32]
                 // If there's a handler, let it take over
                 if let Some(handler) = handler_opt
                 {
-                    return handler(pre_ctx).await;
+                    return handler(pre_ctx, hobj).await;
                 }
             }
         },

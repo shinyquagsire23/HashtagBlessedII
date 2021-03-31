@@ -57,7 +57,7 @@ mod util {
     
     macro_rules! kstr_len {
         ($a:expr, $b:expr) => {
-            (str_from_null_terminated_utf8_u64ptr_unchecked_len(crate::arm::mmu::translate_el1_stage12($a), $b))
+            (str_from_null_terminated_utf8_u64ptr_unchecked_len(crate::arm::mmu::translate_el1_stage12($a), $b as u32))
         }
     }
 }

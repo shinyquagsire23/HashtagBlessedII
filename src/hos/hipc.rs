@@ -40,15 +40,69 @@ pub const DOMAIN_CMD_SEND:     u8 = 1;
 pub const DOMAIN_CMD_CLOSEOBJ: u8 = 2;
 
 #[derive(Clone)]
+pub struct HExtraNone
+{
+}
+
+#[derive(Clone)]
+pub struct HNone
+{
+}
+
+#[derive(Clone)]
+pub struct HExtraString
+{
+    pub str: String
+}
+
+#[derive(Clone)]
 pub enum HObject
 {
+    None(),
     ClientSession(Arc<Mutex<HClientSession>>),
+    DomainSession(Arc<Mutex<HDomainSession>>),
     Port(Arc<Mutex<HPort>>)
+}
+
+#[derive(Clone)]
+pub enum HObjectExtra
+{
+    None(HExtraNone),
+    String(HExtraString)
 }
 
 static mut DOMAINOBJ_TO_SESSION: BTreeMap<HDomainObj, Arc<Mutex<HDomainSession>>> = BTreeMap::new();
 static mut HANDLE_TO_OBJ: BTreeMap<HHandle, HObject> = BTreeMap::new();
 static mut NAME_TO_SERVERPORT: BTreeMap<String, Arc<Mutex<HPort>>> = BTreeMap::new();
+
+impl HObject
+{
+    pub fn get_extra(&self) -> HObjectExtra
+    {
+        match self
+        {
+            HObject::ClientSession(a) => { a.lock().get_extra() },
+            HObject::DomainSession(a) => { a.lock().get_extra() },
+            _ => { HObjectExtra::None(HExtraNone{}) }
+        }
+    }
+    
+    pub fn set_extra(&self, extra: HObjectExtra)
+    {
+        match self
+        {
+            HObject::ClientSession(a) => { a.lock().set_extra(extra); },
+            HObject::DomainSession(a) => { a.lock().set_extra(extra); },
+            _ => { HObjectExtra::None(HExtraNone{}); }
+        }
+    }
+    
+    pub fn set_extra_str(&self, str: &String)
+    {
+        let extra = HExtraString { str: str.clone() };
+        self.set_extra(HObjectExtra::String(extra));
+    }
+}
 
 pub fn hipc_register_domain(obj: HDomainObj, session: Arc<Mutex<HDomainSession>>)
 {
@@ -506,6 +560,7 @@ impl HIPCHandleDesc
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct HIPCStaticDesc
 {
     index: u16,
@@ -541,6 +596,11 @@ impl HIPCStaticDesc
     pub const fn packed_size(&self) -> u64
     {
         8
+    }
+    
+    pub fn read_str(&self) -> String
+    {
+        String::from(kstr_len!(self.addr, self.size))
     }
 }
 
@@ -580,6 +640,11 @@ impl HIPCSendRecvExchDesc
     pub const fn packed_size(&self) -> u64
     {
         12
+    }
+    
+    pub fn read_str(&self) -> String
+    {
+        String::from(kstr_len!(self.addr, self.size))
     }
 }
 
@@ -852,6 +917,14 @@ impl HIPCPacket
         return None;
     }
     
+    pub fn get_static(&self, idx: usize) -> Option<HIPCStaticDesc>
+    {
+        if idx < self.static_descs.len() {
+            return Some(self.static_descs[idx]);
+        }
+        return None;
+    }
+    
     pub fn hook_first_handle(&self, session_handle: u32, handler: HClientSessionHandler) -> bool
     {
         if let Some(mut hsession) = hipc_get_handle_clientsession(session_handle)
@@ -889,6 +962,34 @@ impl HIPCPacket
             }
         }
         return false;
+    }
+    
+    pub fn get_first_handle_obj(&self, session_handle: u32) -> Option<HObject>
+    {
+        if let Some(mut hsession) = hipc_get_handle_clientsession(session_handle)
+        {
+            // HOS signals for a process to only use domains by returning a domain pkt w/ cmd 0?
+            if self.is_domain() && self.get_domain_cmd() == 1
+            {
+                // Domain obj out
+                let obj = self.read_u32(0);
+            
+                if let Some(mut hsession) = hipc_get_domain_session(HDomainObj::from_curpid(session_handle, obj))
+                {
+                    return Some(HObject::DomainSession(hsession.clone()));
+                }
+            }
+            else
+            {
+                if let Some(handle) = self.get_handle(0) {
+                    if let Some(mut hsession) = hipc_get_handle_clientsession(handle)
+                    {
+                        return Some(HObject::ClientSession(hsession.clone()));
+                    }
+                }
+            }
+        }
+        return None;
     }
     
     pub fn get_type(&self) -> u16

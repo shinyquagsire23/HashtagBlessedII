@@ -9,14 +9,16 @@ use alloc::prelude::v1::Box;
 use core::pin::Pin;
 use super::hdomainobj::HDomainObj;
 use super::hdomainsession::HDomainSession;
+use super::hipc::{HExtraNone, HObject, HObjectExtra};
 
-pub type HClientSessionHandler = fn(in_: [u64; 32]) -> Pin<Box<dyn Future<Output = [u64; 32]> + Send>>;
+pub type HClientSessionHandler = fn(in_: [u64; 32], hobj: HObject) -> Pin<Box<dyn Future<Output = [u64; 32]> + Send>>;
  
 pub struct HClientSession
 {
     pub parent_port_pid: u8,
     pub client_pid: u8,
-    pub handler: Option<HClientSessionHandler>
+    pub handler: Option<HClientSessionHandler>,
+    pub extra: HObjectExtra
 }
 
 impl HClientSession
@@ -27,7 +29,8 @@ impl HClientSession
         {
             parent_port_pid: parent_pid,
             client_pid: client_pid,
-            handler: None
+            handler: None,
+            extra: HObjectExtra::None(HExtraNone{})
         }
     }
     
@@ -37,7 +40,8 @@ impl HClientSession
         {
             parent_port_pid: self.parent_port_pid,
             client_pid: self.client_pid,
-            handler: None
+            handler: None,
+            extra: self.extra.clone()
         }
     }
     
@@ -49,6 +53,16 @@ impl HClientSession
     pub fn get_handler(&self) -> Option<HClientSessionHandler>
     {
         self.handler
+    }
+    
+    pub fn set_extra(&mut self, extra: HObjectExtra)
+    {
+        self.extra = extra;
+    }
+    
+    pub fn get_extra(&self) -> HObjectExtra
+    {
+        self.extra.clone()
     }
     
     pub fn convert_to_domain(&self, handle: u32, obj_id: u32) -> (HDomainObj, HDomainSession)
@@ -69,7 +83,8 @@ impl HClientSession
         {
             parent_port_pid: self.parent_port_pid,
             client_pid: self.client_pid,
-            handler: self.handler
+            handler: self.handler,
+            extra: self.extra.clone()
         }
     }
 }
