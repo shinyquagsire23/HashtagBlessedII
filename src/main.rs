@@ -73,6 +73,7 @@ use arm::threading::get_core;
 use exception_handler::*;
 use vm::vsysreg::*;
 use crate::vm::vsmc::vsmc_get_warm_entrypoint;
+use modules::ipc::ipc_init;
 
 global_asm!(include_str!("start.s"));
 
@@ -177,6 +178,7 @@ pub extern "C" fn main_cold()
     // Set up guest vMMIO, vSVC allocations
     vmmio_init();
     vsvc_init();
+    ipc_init();
     
     // Start IRQs for USB and tasking
     let mut gic: GIC = GIC::new();
