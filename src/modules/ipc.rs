@@ -5,31 +5,97 @@
  */
 
 use core::{future::Future, pin::Pin};
-use crate::hos::{hport::HPort, hhandle::HHandle, hclientsession::HClientSession};
+use crate::hos::{hport::HPort, hhandle::HHandle, hclientsession::HClientSession, hclientsession::HClientSessionHandler};
 use spin::mutex::Mutex;
-use crate::hos::hipc::{hipc_get_handle_clientsession, hipc_get_named_serverport, hipc_register_handle_clientsession, hipc_get_packet};
+use crate::hos::hipc::{PKT_TYPE_INVALID, PKT_TYPE_LEGACYREQEST, PKT_TYPE_CLOSE, PKT_TYPE_LEGACYCONTROL, PKT_TYPE_REQUEST, PKT_TYPE_CONTROL, PKT_TYPE_REQUESTWITHCONTEXT, PKT_TYPE_CONTROLWITHCONTEXT, DOMAIN_CMD_SEND, DOMAIN_CMD_CLOSEOBJ};
+use crate::hos::hipc::{hipc_get_handle_clientsession, hipc_get_named_serverport, hipc_register_handle_clientsession, hipc_get_packet, hipc_close_handle, hipc_register_domain, hipc_get_domain_session};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::prelude::v1::Box;
 use crate::task::svc_wait::SvcWait;
 use crate::vm::vsvc::vsvc_get_curpid_name;
+use crate::hos::hdomainobj::HDomainObj;
+use crate::hos::hdomainsession::HDomainSession;
 
 pub fn ipc_init()
 {
     
 }
 
+async fn handle_ifilesystem(mut pre_ctx: [u64; 32]) -> [u64; 32]
+{
+    let pkt = hipc_get_packet();
+    
+    println_core!("IFilesystem cmd {}!", pkt.get_cmd_id());
+    return pre_ctx;
+}
+
+fn handle_ifilesystem_boxed(mut pre_ctx: [u64; 32]) -> Pin<Box<dyn Future<Output = [u64; 32]> + Send>> {
+    Box::pin(handle_ifilesystem(pre_ctx))
+}
+
 async fn handle_fsp(mut pre_ctx: [u64; 32]) -> [u64; 32]
 {
     let pkt = hipc_get_packet();
+    
+    let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
+    let hsession = hipc_get_handle_clientsession(handle).unwrap();
     
     //pkt.print();
     /*if pkt.is_domain()
     {
         pkt.print();
     }*/
-    println_core!("fsp-ldr cmd {} from `{}`", pkt.get_cmd_id(), vsvc_get_curpid_name());    
+    //println_core!("fsp-ldr cmd {} from `{}`", pkt.get_cmd_id(), vsvc_get_curpid_name());
     
+    match pkt.get_cmd_id()
+    {
+        0 => // OpenCodeFileSystem
+        {
+            let tid = pkt.read_u64(0);
+            
+            // Wait for SVC to complete
+            let post_ctx = SvcWait::new(pre_ctx).await;
+            let resp = hipc_get_packet();
+    
+            // HOS signals for a process to only use domains by returning a domain pkt w/ cmd 0?
+            if (resp.is_domain() && resp.get_domain_cmd() == 1)
+            {
+                println_core!("fsp-ldr::OpenCodeFileSystem({:016x}, ``) from `{}`", tid, vsvc_get_curpid_name());
+            
+                // Domain obj out
+                let obj = resp.read_u32(0);
+            
+                let hsession_locked = hsession.lock();
+                let conv = hsession_locked.convert_to_domain(handle, obj);
+                
+                // Registration pair
+                let domain_obj = conv.0;
+                let mut domain_sess = conv.1;
+                
+                domain_sess.set_handler(handle_ifilesystem_boxed);
+                
+                hipc_register_domain(domain_obj, Arc::new(Mutex::new(domain_sess)));
+                return post_ctx;
+            }
+            else
+            {
+                // Probably cannot happen but handle anyways
+                if let Some(handle) = resp.get_handle(0) {
+                    // TODO: Copied handles may not actually belong to parent
+                    let mut service_hsession = hsession.lock().new_from_parent();
+                    
+                    service_hsession.set_handler(handle_ifilesystem_boxed);
+                    
+                    // Link new HClientSession to HOS handle
+                    hipc_register_handle_clientsession(handle, Arc::new(Mutex::new(service_hsession)));
+                }
+            }
+            return post_ctx;
+        },
+        _ => { return pre_ctx; }
+    }
+
     return pre_ctx;
 }
 
@@ -79,12 +145,12 @@ async fn handle_sm(mut pre_ctx: [u64; 32]) -> [u64; 32]
         2 => // RegisterService
         { 
             let name = pkt.read_str(0);
-            println_core!("sm::RegisterService(`{}`) from `{}`", name, vsvc_get_curpid_name());
+            //println_core!("sm::RegisterService(`{}`) from `{}`", name, vsvc_get_curpid_name());
         },
         3 => // UnregisterService
         { 
             let name = pkt.read_str(0);
-            println_core!("sm::UnregisterService(`{}`) from `{}`", name, vsvc_get_curpid_name());
+            //println_core!("sm::UnregisterService(`{}`) from `{}`", name, vsvc_get_curpid_name());
         },
         4 => // DetachClient (11.0.0+)
         { 
@@ -115,4 +181,122 @@ pub fn ipc_hook_namedport(port_name_str: &String, session_handle: u32)
         // Link new HClientSession to HOS handle
         hipc_register_handle_clientsession(session_handle, Arc::new(Mutex::new(hsession)));
     }
+}
+
+pub async fn ipc_handle_syncrequest_control(mut pre_ctx: [u64; 32]) -> [u64; 32]
+{
+    let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
+    let pkt = hipc_get_packet();
+
+    match pkt.get_cmd_id()
+    {
+        0 => // ConvertCurrentObjectToDomain
+        {
+            if let Some(mut hsession) = hipc_get_handle_clientsession(handle)
+            {
+                // Wait for SVC to complete
+                let post_ctx = SvcWait::new(pre_ctx).await;
+                let resp = hipc_get_packet();
+                
+                // Domain obj out
+                let obj = resp.read_u32(0);
+            
+                let hsession_locked = hsession.lock();
+                let conv = hsession_locked.convert_to_domain(handle, obj);
+                
+                // Registration pair
+                let domain_obj = conv.0;
+                let domain_sess = conv.1;
+                
+                hipc_register_domain(domain_obj, Arc::new(Mutex::new(domain_sess)));
+                return post_ctx;
+            }
+        },
+        1 => // CopyFromCurrentDomain
+        {
+            //println_core!("CopyFromCurrentDomain");
+        },
+        2 => // CloneCurrentObject
+        {
+            //println_core!("CloneCurrentObject");
+        },
+        3 => // QueryPointerBufferSize
+        {
+            //println_core!("QueryPointerBufferSize");
+        },
+        4 => // CloneCurrentObjectEx
+        {
+            //println_core!("CloneCurrentObjectEx");
+        },
+        _ => {}
+    }
+    return pre_ctx;
+}
+
+pub async fn ipc_handle_syncrequest(mut pre_ctx: [u64; 32]) -> [u64; 32]
+{
+    let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
+        
+    let pkt = hipc_get_packet();
+    match pkt.get_type()
+    {
+        PKT_TYPE_LEGACYREQEST | PKT_TYPE_REQUEST | PKT_TYPE_REQUESTWITHCONTEXT =>
+        {
+            if pkt.is_domain()
+            {
+                let obj = pkt.get_domain_id();
+                let mut handler_opt: Option<HClientSessionHandler> = None;
+                if let Some(mut hsession) = hipc_get_domain_session(HDomainObj::from_curpid(handle, obj))
+                {
+                    let hsession_locked = hsession.lock();
+
+                    handler_opt = hsession_locked.get_handler();
+                }
+
+                // If there's a handler, let it take over
+                if let Some(handler) = handler_opt
+                {
+                    return handler(pre_ctx).await;
+                }
+            }
+            else
+            {
+                // Get port struct
+                let mut handler_opt: Option<HClientSessionHandler> = None;
+                if let Some(mut hsession) = hipc_get_handle_clientsession(handle)
+                {
+                    let hsession_locked = hsession.lock();
+
+                    //println_core!("svcSendSyncRequest from `{}` to handle {:x}", vsvc_get_curpid_name(), handle);
+                    //println!("          `{}` -> `{}`", vsvc_get_curpid_name(), vsvc_get_pid_name(hsession_locked.parent_port_pid as u32));
+                    
+                    handler_opt = hsession_locked.get_handler();
+                }
+                
+                // If there's a handler, let it take over
+                if let Some(handler) = handler_opt
+                {
+                    return handler(pre_ctx).await;
+                }
+            }
+        },
+        PKT_TYPE_CLOSE =>
+        {
+            if pkt.is_domain()
+            {
+                //TODO?
+            }
+            hipc_close_handle(handle);
+        }
+        PKT_TYPE_LEGACYCONTROL | PKT_TYPE_CONTROL | PKT_TYPE_CONTROLWITHCONTEXT =>
+        {
+            return ipc_handle_syncrequest_control(pre_ctx).await;
+        }
+        _ => { return pre_ctx; }
+    }
+    
+
+    //panic!("asdf");
+    
+    return pre_ctx;
 }

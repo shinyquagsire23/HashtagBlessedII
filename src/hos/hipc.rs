@@ -18,6 +18,8 @@ use super::hclientsession::HClientSession;
 use alloc::string::String;
 use spin::mutex::Mutex;
 use core::str;
+use super::hdomainobj::HDomainObj;
+use super::hdomainsession::HDomainSession;
 
 pub const MAGIC_SFCI: u32 = 0x49434653;
 pub const MAGIC_SFCO: u32 = 0x4F434653;
@@ -25,37 +27,91 @@ pub const MAGIC_SFCO: u32 = 0x4F434653;
 pub const HIPC_MAX_BUFS: usize = 8;
 pub const HIPC_MAX_OBJS: usize = 8;
 
-/*enum HIPCPacketType : u16
-{
-    HIPCPacketType_Invalid = 0,
-    HIPCPacketType_LegacyRequest = 1,
-    HIPCPacketType_Close = 2,
-    HIPCPacketType_LegacyControl = 3,
-    HIPCPacketType_Request = 4,
-    HIPCPacketType_Control = 5,
-    HIPCPacketType_RequestWithContext = 6,
-    HIPCPacketType_ControlWithContext = 7
-};
+pub const PKT_TYPE_INVALID:            u16 = 0;
+pub const PKT_TYPE_LEGACYREQEST:       u16 = 1;
+pub const PKT_TYPE_CLOSE:              u16 = 2;
+pub const PKT_TYPE_LEGACYCONTROL:      u16 = 3;
+pub const PKT_TYPE_REQUEST:            u16 = 4;
+pub const PKT_TYPE_CONTROL:            u16 = 5;
+pub const PKT_TYPE_REQUESTWITHCONTEXT: u16 = 6;
+pub const PKT_TYPE_CONTROLWITHCONTEXT: u16 = 7;
 
-enum HIPCDomainCommand : u8
-{
-    HIPCDomainCommand_Send = 1,
-    HIPCDomainCommand_CloseVirtualHandle = 2,
-};*/
+pub const DOMAIN_CMD_SEND:     u8 = 1;
+pub const DOMAIN_CMD_CLOSEOBJ: u8 = 2;
 
-static mut HANDLE_TO_CLIENTSESSION: BTreeMap<HHandle, Arc<Mutex<HClientSession>>> = BTreeMap::new();
-static mut HANDLE_TO_SERVERPORT: BTreeMap<HHandle, Arc<Mutex<HPort>>> = BTreeMap::new();
+#[derive(Clone)]
+pub enum HObject
+{
+    ClientSession(Arc<Mutex<HClientSession>>),
+    Port(Arc<Mutex<HPort>>)
+}
+
+static mut DOMAINOBJ_TO_SESSION: BTreeMap<HDomainObj, Arc<Mutex<HDomainSession>>> = BTreeMap::new();
+static mut HANDLE_TO_OBJ: BTreeMap<HHandle, HObject> = BTreeMap::new();
 static mut NAME_TO_SERVERPORT: BTreeMap<String, Arc<Mutex<HPort>>> = BTreeMap::new();
+
+pub fn hipc_register_domain(obj: HDomainObj, session: Arc<Mutex<HDomainSession>>)
+{
+    unsafe
+    {
+        DOMAINOBJ_TO_SESSION.insert(obj, session);
+    }
+}
 
 pub fn hipc_register_handle_serverport(handle: u32, port: Arc<Mutex<HPort>>)
 {
     unsafe
     {
         let name = port.lock().name.clone();
-        HANDLE_TO_SERVERPORT.insert(HHandle::from_curpid(handle), port.clone());
+        HANDLE_TO_OBJ.insert(HHandle::from_curpid(handle), HObject::Port(port.clone()));
         if let Some(name) = &name
         {
             NAME_TO_SERVERPORT.insert(name.clone(), port);
+        }
+    }
+}
+
+pub fn hipc_register_handle_clientsession(handle: u32, session: Arc<Mutex<HClientSession>>)
+{
+    unsafe
+    {
+        HANDLE_TO_OBJ.insert(HHandle::from_curpid(handle), HObject::ClientSession(session));
+    }
+}
+
+pub fn hipc_get_domain_session(obj: HDomainObj) -> Option<Arc<Mutex<HDomainSession>>>
+{
+    unsafe
+    {
+        if let Some(arc_res) = DOMAINOBJ_TO_SESSION.get(&obj)
+        {
+            return Some(arc_res.clone());
+        }
+        return None;
+    }
+}
+
+pub fn hipc_get_handle_obj(handle: u32) -> Option<HObject>
+{
+    unsafe
+    {
+        let hhandle = HHandle::from_curpid(handle);
+        if let Some(arc_res) = HANDLE_TO_OBJ.get(&hhandle)
+        {
+            return Some(arc_res.clone());
+        }
+        return None;
+    }
+}
+
+pub fn hipc_close_handle(handle: u32)
+{
+    unsafe
+    {
+        let hhandle = HHandle::from_curpid(handle);
+        if let Some(arc_res) = HANDLE_TO_OBJ.remove(&hhandle)
+        {
+            //TODO?
         }
     }
 }
@@ -65,9 +121,13 @@ pub fn hipc_get_handle_serverport(handle: u32) -> Option<Arc<Mutex<HPort>>>
     unsafe
     {
         let hhandle = HHandle::from_curpid(handle);
-        if let Some(arc_res) = HANDLE_TO_SERVERPORT.get(&hhandle)
+        if let Some(arc_res) = HANDLE_TO_OBJ.get(&hhandle)
         {
-            return Some(arc_res.clone());
+            match arc_res
+            {
+                HObject::Port(port) => { return Some(port.clone()); },
+                _ => { return None; }
+            }
         }
         return None;
     }
@@ -85,22 +145,18 @@ pub fn hipc_get_named_serverport(name: &String) -> Option<Arc<Mutex<HPort>>>
     }
 }
 
-pub fn hipc_register_handle_clientsession(handle: u32, session: Arc<Mutex<HClientSession>>)
-{
-    unsafe
-    {
-        HANDLE_TO_CLIENTSESSION.insert(HHandle::from_curpid(handle), session);
-    }
-}
-
 pub fn hipc_get_handle_clientsession(handle: u32) -> Option<Arc<Mutex<HClientSession>>>
 {
     unsafe
     {
         let hhandle = HHandle::from_curpid(handle);
-        if let Some(arc_handle) = HANDLE_TO_CLIENTSESSION.get(&hhandle)
+        if let Some(arc_handle) = HANDLE_TO_OBJ.get(&hhandle)
         {
-            return Some(arc_handle.clone());
+            match arc_handle
+            {
+                HObject::ClientSession(session) => { return Some(session.clone()); },
+                _ => { return None; }
+            }
         }
         return None;
     }
@@ -171,6 +227,26 @@ impl HIPCDomainPayload
     pub fn get_cmd_id(&self) -> u32
     {
         self.data.command
+    }
+    
+    pub fn get_domain_cmd(&self) -> u8
+    {
+        self.cmd
+    }
+    
+    pub fn get_domain_id(&self) -> u32
+    {
+        self.obj_id
+    }
+    
+    pub fn get_domain_obj(&self, idx: usize) -> Option<u32>
+    {
+        if idx >= self.num_objs as usize
+        {
+            return None
+        }
+        
+        return Some(self.objs[idx]);
     }
     
     pub fn read_u8(&self, offs: usize) -> u8
@@ -656,6 +732,45 @@ impl HIPCPacket
         }
     }
     
+    pub fn get_domain_cmd(&self) -> u8
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                0
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.get_domain_cmd()
+            }
+        }
+    }
+    
+    pub fn get_domain_id(&self) -> u32
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                0
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.get_domain_id()
+            }
+        }
+    }
+    
+    pub fn get_domain_obj(&self, idx: usize) -> Option<u32>
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                None
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.get_domain_obj(idx)
+            }
+        }
+    }
+    
     pub fn read_u8(&self, offs: usize) -> u8
     {
         match &self.data_payload
@@ -727,6 +842,11 @@ impl HIPCPacket
             return desc.get_handle(idx);
         }
         return None;
+    }
+    
+    pub fn get_type(&self) -> u16
+    {
+        self.pkt_type
     }
     
     pub fn pack(&self)

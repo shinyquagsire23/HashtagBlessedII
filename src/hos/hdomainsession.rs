@@ -7,23 +7,21 @@
 use core::future::Future;
 use alloc::prelude::v1::Box;
 use core::pin::Pin;
-use super::hdomainobj::HDomainObj;
-use super::hdomainsession::HDomainSession;
 
-pub type HClientSessionHandler = fn(in_: [u64; 32]) -> Pin<Box<dyn Future<Output = [u64; 32]> + Send>>;
+pub type HDomainSessionHandler = fn(in_: [u64; 32]) -> Pin<Box<dyn Future<Output = [u64; 32]> + Send>>;
  
-pub struct HClientSession
+pub struct HDomainSession
 {
     pub parent_port_pid: u8,
     pub client_pid: u8,
-    pub handler: Option<HClientSessionHandler>
+    pub handler: Option<HDomainSessionHandler>
 }
 
-impl HClientSession
+impl HDomainSession
 {
     pub fn new(parent_pid: u8, client_pid: u8) -> Self
     {
-        HClientSession
+        HDomainSession
         {
             parent_port_pid: parent_pid,
             client_pid: client_pid,
@@ -33,7 +31,7 @@ impl HClientSession
     
     pub fn new_from_parent(&self) -> Self
     {
-        HClientSession
+        HDomainSession
         {
             parent_port_pid: self.parent_port_pid,
             client_pid: self.client_pid,
@@ -41,31 +39,19 @@ impl HClientSession
         }
     }
     
-    pub fn set_handler(&mut self, handler: HClientSessionHandler)
+    pub fn set_handler(&mut self, handler: HDomainSessionHandler)
     {
         self.handler = Some(handler);
     }
     
-    pub fn get_handler(&self) -> Option<HClientSessionHandler>
+    pub fn get_handler(&self) -> Option<HDomainSessionHandler>
     {
         self.handler
     }
     
-    pub fn convert_to_domain(&self, handle: u32, obj_id: u32) -> (HDomainObj, HDomainSession)
-    {
-        let mut obj = HDomainObj::from_curpid(handle, obj_id);
-        let mut session = HDomainSession::new(self.parent_port_pid, self.client_pid);
-        
-        if let Some(handler) = self.handler
-        {
-            session.set_handler(handler);
-        }
-        return (obj, session);
-    }
-    
     pub fn clone(&self) -> Self
     {
-        HClientSession
+        HDomainSession
         {
             parent_port_pid: self.parent_port_pid,
             client_pid: self.client_pid,
