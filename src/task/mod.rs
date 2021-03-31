@@ -128,7 +128,9 @@ pub fn task_run_svc(thread_ctx: u64, future: impl Future<Output = ([u64; 32])> +
         let mut executor = SVC_EXECUTOR.as_mut().unwrap();
         let task = SvcTask::new(thread_ctx, future);
         let task_id = task.id;
-        executor.queue(task);
+        if !executor.task_exists(&task) {
+            executor.queue(task);
+        }
         return task_id;
     }
 }

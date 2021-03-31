@@ -17,6 +17,7 @@ use crate::vm::vsvc::vsvc_get_curpid_name;
 use crate::hos::hdomainobj::HDomainObj;
 use crate::hos::hdomainsession::HDomainSession;
 use crate::modules::ipc::*;
+use crate::hos::hsvc::hsvc_sleep_thread;
 
 pub fn fsp_init()
 {
@@ -30,7 +31,17 @@ async fn handle_ifile(mut pre_ctx: [u64; 32]) -> [u64; 32]
     
     println_core!("IFile cmd {}!", pkt.get_cmd_id());
     
-    return pre_ctx;
+    // Call svcSleepThread before calling svcReplyAndReceive
+    pre_ctx = hsvc_sleep_thread(pre_ctx, 1000).await;
+    pre_ctx = hsvc_sleep_thread(pre_ctx, 1000).await;
+    
+    // Wait for svcReplyAndReceive to complete
+    let mut post_ctx = SvcWait::new(pre_ctx).await;
+    
+    // Call an SVC after svcReplyAndReceive
+    pre_ctx = hsvc_sleep_thread(pre_ctx, 1000).await;
+    
+    return post_ctx;
 }
 
 

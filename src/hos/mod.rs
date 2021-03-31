@@ -13,3 +13,4 @@ pub mod hport;
 pub mod hclientsession;
 pub mod hdomainobj;
 pub mod hdomainsession;
+pub mod hsvc;

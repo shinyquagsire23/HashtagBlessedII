@@ -12,6 +12,7 @@ use crate::logger::*;
 use crate::arm::threading::*;
 
 static mut SVCWAIT_CTX: [[u64; 32]; 4] = [[0; 32]; 4];
+static mut SVCWAIT_CTX_SET: [bool; 4] = [false; 4];
 
 pub struct SvcWait 
 {
@@ -44,6 +45,7 @@ impl SvcWait
         unsafe
         {
             SVCWAIT_CTX[get_core() as usize] = ctx;
+            SVCWAIT_CTX_SET[get_core() as usize] = false;
         }
     }
     
@@ -54,10 +56,15 @@ impl SvcWait
         }
     }
     
+    pub fn is_waiting() -> bool {
+        unsafe { SVCWAIT_CTX_SET[get_core() as usize] }
+    }
+    
     pub fn new(ctx: [u64; 32]) -> Self {
         unsafe
         {
             SVCWAIT_CTX[get_core() as usize] = ctx;
+            SVCWAIT_CTX_SET[get_core() as usize] = true;
         }
         SvcWait { polled_ticks: 0 }
     }

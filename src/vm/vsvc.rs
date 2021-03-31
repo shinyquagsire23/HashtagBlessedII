@@ -32,6 +32,7 @@ static mut PROCESS_NAME_PID: BTreeMap<String, u32> = BTreeMap::new();
 static mut VSVC_QLAUNCH_STARTED: bool = false;
 static mut VSVC_TTBRS: BTreeMap<u32, u64> = BTreeMap::new();
 static mut VSVC_PROC_HANDLES: BTreeMap<u32, String> = BTreeMap::new();
+static mut VSVC_SVC_ADDR: [u64; 128] = [0; 128];
 
 include!(concat!(env!("OUT_DIR"), "/vsvc_gen.rs"));
 
@@ -110,6 +111,11 @@ pub fn vsvc_init()
     }
 }
 
+pub fn vsvc_get_svc_addr(idx: usize) -> u64
+{
+    unsafe { VSVC_SVC_ADDR[idx] }
+}
+
 pub fn vsvc_get_curpid() -> u32
 {
     unsafe
@@ -163,6 +169,11 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
     //let svc = HorizonSvc::from_iss(iss);
     let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
     
+    unsafe
+    {
+        VSVC_SVC_ADDR[(iss & 0x7F) as usize] = ctx[11];
+    }
+    
     /*let timeout_stretch = 1;
     match svc {
         HorizonSvc::WaitSynchronization(_) => {
@@ -186,7 +197,7 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
     let mut pre_ctx: [u64; 32] = Default::default();
     pre_ctx.copy_from_slice(&ctx[..32]);
     if _svc_gen_pre(iss, thread_ctx, pre_ctx) {
-        return get_elr_el2();
+        return ctx[31];
     }
     
     // SVC handler returned early
@@ -195,7 +206,7 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
             ctx[i] = ret_ctx[i];
         }
         
-        return get_elr_el2();
+        return ctx[31];
     }
     else
     {
@@ -206,10 +217,10 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
             ctx[i] = ret_ctx[i];
         }
         
-        return get_elr_el2();
+        return ctx[31];
     }
 
-    return get_elr_el2();
+    return ctx[31];
 }
 
 pub fn vsvc_post_handle(iss: u32, ctx: &mut [u64]) -> u64
@@ -225,17 +236,30 @@ pub fn vsvc_post_handle(iss: u32, ctx: &mut [u64]) -> u64
     post_ctx.copy_from_slice(&ctx[..32]);
     SvcWait::populate_ctx(post_ctx);
     
+    // async handler is complete
     if let Some(ret_ctx) = task_advance_svc_ctx(thread_ctx) {
         for i in 0..32 {
             ctx[i] = ret_ctx[i];
         }
         
-        return get_elr_el2();
+        return ctx[31];
+    }
+    else if SvcWait::is_waiting() // We have another wait
+    {
+        let ret_ctx = SvcWait::get_ctx();
+        for i in 0..32 {
+            ctx[i] = ret_ctx[i];
+        }
+        
+        // emulate ff 42 03 d5     msr        DAIFClr,#0x2
+        ctx[38] &= !0x80;
+        
+        return ctx[31];
     }
     else
     {
         // No handler, do nothing
-        return get_elr_el2();
+        return ctx[31];
     }
 }
 

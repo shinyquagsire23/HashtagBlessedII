@@ -75,6 +75,12 @@ impl SvcExecutor
             //panic!("task with ID {} already exists in task queue", task_id);
         }
     }
+    
+    pub fn task_exists(&self, task: &SvcTask) -> bool
+    {
+        let task_id = task.id;
+        return self.tasks.contains_key(&task.id);
+    }
 
     pub fn run_svc(&mut self, task_id: SvcTaskId) -> Option<[u64; 32]>
     {
