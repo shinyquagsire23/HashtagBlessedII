@@ -14,7 +14,7 @@ use alloc::{collections::BTreeMap, sync::Arc};
 use core::cmp::{Ordering, Eq};
 use super::hhandle::HHandle;
 use super::hport::HPort;
-use super::hclientsession::HClientSession;
+use super::hclientsession::{HClientSession, HClientSessionHandler};
 use alloc::string::String;
 use spin::mutex::Mutex;
 use core::str;
@@ -55,6 +55,14 @@ pub fn hipc_register_domain(obj: HDomainObj, session: Arc<Mutex<HDomainSession>>
     unsafe
     {
         DOMAINOBJ_TO_SESSION.insert(obj, session);
+    }
+}
+
+pub fn hipc_remove_domain(obj: HDomainObj)
+{
+    unsafe
+    {
+        DOMAINOBJ_TO_SESSION.remove(&obj);
     }
 }
 
@@ -307,8 +315,8 @@ impl HIPCDataPayload
     pub fn unpack(buf: u64, data_size: u16) -> HIPCDataPayload
     {
         let mut buf_data = buf + 16;
-        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        for i in 0..data_size
+        let mut data: Vec<u8> = Vec::with_capacity((data_size-0x10) as usize);
+        for i in 0..(data_size-0x10)
         {
             data.push(peek8(buf_data));
             buf_data += 1;
@@ -842,6 +850,45 @@ impl HIPCPacket
             return desc.get_handle(idx);
         }
         return None;
+    }
+    
+    pub fn hook_first_handle(&self, session_handle: u32, handler: HClientSessionHandler) -> bool
+    {
+        if let Some(mut hsession) = hipc_get_handle_clientsession(session_handle)
+        {
+            // HOS signals for a process to only use domains by returning a domain pkt w/ cmd 0?
+            if self.is_domain() && self.get_domain_cmd() == 1
+            {
+                // Domain obj out
+                let obj = self.read_u32(0);
+            
+                let hsession_locked = hsession.lock();
+                let conv = hsession_locked.convert_to_domain(session_handle, obj);
+                
+                // Registration pair
+                let domain_obj = conv.0;
+                let mut domain_sess = conv.1;
+                
+                domain_sess.set_handler(handler);
+                
+                hipc_register_domain(domain_obj, Arc::new(Mutex::new(domain_sess)));
+                return true;
+            }
+            else
+            {
+                if let Some(handle) = self.get_handle(0) {
+                    // TODO: Copied handles may not actually belong to parent
+                    let mut service_hsession = hsession.lock().new_from_parent();
+                    
+                    service_hsession.set_handler(handler);
+                    
+                    // Link new HClientSession to HOS handle
+                    hipc_register_handle_clientsession(session_handle, Arc::new(Mutex::new(service_hsession)));
+                    return true;
+                }
+            }
+        }
+        return false;
     }
     
     pub fn get_type(&self) -> u16

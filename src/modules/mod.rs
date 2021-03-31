@@ -5,3 +5,4 @@
  */
 
 pub mod ipc;
+pub mod fsp;
