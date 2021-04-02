@@ -274,7 +274,7 @@ pub fn log_process()
             }
         }
         
-        //log_process_cmd();
+        log_process_cmd();
         
         debug_flush(usbd);
         

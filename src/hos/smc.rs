@@ -4,6 +4,8 @@
  * See LICENSE.md for terms of use.
  */
 
+use crate::vm::funcs::smc1_shim;
+
 // TODO enum?
 pub const SMC_CPUSUSPEND:        u64 = 0x1C4000001;
 pub const SMC_CPUOFF:            u64 = 0x184000002;
@@ -87,4 +89,27 @@ pub const fn get_smc_name(smc_cmd: u64) -> &'static str
         SMC0_UNWRAPCOMMONTITLEKEYE => "UnwrapCommonTitleKey",
         _ => "Unknown",
     }
+}
+
+pub fn smmu_writereg(addr: u64, val: u32) -> u32
+{
+    let mut ctx: [u64; 8] = [0; 8];
+    ctx[0] = SMC_RWREGISTER & 0xFFFFFFFF;
+    ctx[1] = addr;
+    ctx[2] = 0xFFFFFFFF;
+    ctx[3] = val as u64;
+    unsafe { smc1_shim(ctx.as_mut_ptr()); }
+    return (ctx[0] & 0xFFFFFFFF) as u32;
+}
+
+pub fn smmu_readreg(addr: u64) -> u32
+{
+    let mut ctx: [u64; 8] = [0; 8];
+    ctx[0] = SMC_RWREGISTER & 0xFFFFFFFF;
+    ctx[1] = addr;
+    ctx[2] = 0x0;
+    ctx[3] = 0x0;
+    unsafe { smc1_shim(ctx.as_mut_ptr()); }
+    
+    return (ctx[1] & 0xFFFFFFFF) as u32;
 }

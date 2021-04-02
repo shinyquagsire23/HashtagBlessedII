@@ -9,8 +9,8 @@ use crate::vm::vsvc::vsvc_get_curpid;
 
 pub struct HHandle
 {
-    pid: u8,
-    handle: u32
+    pub pid: u8,
+    pub handle: u32
 }
 
 impl PartialOrd for HHandle 

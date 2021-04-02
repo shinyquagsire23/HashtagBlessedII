@@ -75,13 +75,13 @@ async fn handle_ifilesystem(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
         let resp = hipc_get_packet();
         
         // Try to hook first handle/domain if it exists
-        if (resp.hook_first_handle(handle, handle_ifile_boxed))
+        /*if (resp.hook_first_handle(handle, handle_ifile_boxed))
         {
             if let Some(resp_hobj) = resp.get_first_handle_obj(handle) {
                 resp_hobj.set_extra_str(&path);
             }
             println_core!("fsp-ldr::iCodeFileSystem::OpenFile(`{}`) from `{}`", path, vsvc_get_curpid_name());
-        }
+        }*/
             
         return post_ctx;
     }

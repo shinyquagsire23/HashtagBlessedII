@@ -14,6 +14,7 @@ use core::{
 use derive_more::Display;
 use executor::Executor;
 use svc_executor::{SvcExecutor, SvcTask, SvcTaskId};
+use crate::arm::threading::get_core;
 
 pub mod executor;
 pub mod sleep;
@@ -56,14 +57,17 @@ impl TaskId
 }
 
 static mut EXECUTOR: Option<Executor> = None;
-static mut SVC_EXECUTOR: Option<SvcExecutor> = None;
+static mut SVC_EXECUTOR: [Option<SvcExecutor>; 4] = [None, None, None, None];
 
 pub fn task_init()
 {
     unsafe
     {
         EXECUTOR = Some(Executor::new());
-        SVC_EXECUTOR = Some(SvcExecutor::new());
+        for i in 0..4
+        {
+            SVC_EXECUTOR[i] = Some(SvcExecutor::new());
+        }
     }
 }
 
@@ -107,7 +111,7 @@ pub fn task_advance_svc(task_id: SvcTaskId) -> Option<[u64; 32]>
 {
     unsafe
     {
-        let mut executor = SVC_EXECUTOR.as_mut().unwrap();
+        let mut executor = SVC_EXECUTOR[get_core() as usize].as_mut().unwrap();
         executor.run_svc(task_id)
     }
 }
@@ -116,7 +120,7 @@ pub fn task_advance_svc_ctx(thread_ctx: u64) -> Option<[u64; 32]>
 {
     unsafe
     {
-        let mut executor = SVC_EXECUTOR.as_mut().unwrap();
+        let mut executor = SVC_EXECUTOR[get_core() as usize].as_mut().unwrap();
         executor.run_svc(SvcTaskId(thread_ctx))
     }
 }
@@ -125,7 +129,7 @@ pub fn task_run_svc(thread_ctx: u64, future: impl Future<Output = ([u64; 32])> +
 {
     unsafe
     {
-        let mut executor = SVC_EXECUTOR.as_mut().unwrap();
+        let mut executor = SVC_EXECUTOR[get_core() as usize].as_mut().unwrap();
         let task = SvcTask::new(thread_ctx, future);
         let task_id = task.id;
         if !executor.task_exists(&task) {

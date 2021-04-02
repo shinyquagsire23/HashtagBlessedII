@@ -283,6 +283,8 @@ pub extern "C" fn main_cold()
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     println!("Done copy...");
+    
+    smmu_test();
 
     // Set up guest memory
     let lock = critical_start();

@@ -418,6 +418,7 @@ impl SvcHandler for SvcExitProcess
         
                 RUNNING_PROCESS_NAME.remove(&pid);
             }
+            hipc_remove_pid_handles(pid);
         }
         return pre_ctx;
     }
@@ -457,6 +458,7 @@ impl SvcHandler for SvcTerminateProcess
                 println!("    -> Terminated process {}", proc_name);
                 if let Some(pid) = PROCESS_NAME_PID.remove(&proc_name) {
                     RUNNING_PROCESS_NAME.remove(&pid);
+                    hipc_remove_pid_handles(pid);
                 }
             }
         }
@@ -482,5 +484,17 @@ impl SvcHandler for SvcSendSyncRequest
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
         return ipc_handle_syncrequest(pre_ctx).await;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcCloseHandle
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
+        hipc_close_handle(handle); // TODO error check?
+
+        return pre_ctx;
     }
 }

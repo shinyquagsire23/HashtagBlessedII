@@ -120,6 +120,54 @@ pub fn hipc_remove_domain(obj: HDomainObj)
     }
 }
 
+pub fn hipc_remove_pid_handles(pid: u32)
+{
+    let pid_u8 = (pid & 0xFF) as u8;
+    let mut handle_vec: Vec<&HHandle> = Vec::new();
+    let mut domain_vec: Vec<&HDomainObj> = Vec::new();
+    
+    unsafe
+    {
+        for (key, val) in &HANDLE_TO_OBJ {
+            if key.pid == pid_u8 {
+                handle_vec.push(key);
+            }
+        }
+        
+        for (key, val) in &DOMAINOBJ_TO_SESSION {
+            if key.pid == pid_u8 {
+                domain_vec.push(key);
+            }
+        }
+        
+        for key in handle_vec {
+            HANDLE_TO_OBJ.remove(key);
+        }
+        
+        for key in domain_vec {
+            DOMAINOBJ_TO_SESSION.remove(key);
+        }
+    }
+}
+
+pub fn hipc_remove_domains_from_handle(hhand: &HHandle)
+{
+    let mut domain_vec: Vec<&HDomainObj> = Vec::new();
+    
+    unsafe
+    {
+        for (key, val) in &DOMAINOBJ_TO_SESSION {
+            if key.handle == hhand.handle && key.pid == hhand.pid {
+                domain_vec.push(key);
+            }
+        }
+        
+        for key in domain_vec {
+            DOMAINOBJ_TO_SESSION.remove(key);
+        }
+    }
+}
+
 pub fn hipc_register_handle_serverport(handle: u32, port: Arc<Mutex<HPort>>)
 {
     unsafe
@@ -173,7 +221,8 @@ pub fn hipc_close_handle(handle: u32)
         let hhandle = HHandle::from_curpid(handle);
         if let Some(arc_res) = HANDLE_TO_OBJ.remove(&hhandle)
         {
-            //TODO?
+            hipc_remove_domains_from_handle(&hhandle);
+            // TODO object delete hook?
         }
     }
 }
