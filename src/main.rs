@@ -114,6 +114,7 @@ pub extern "C" fn main_warm(arg: u64)
         tegra_irq_en(IRQNUM_T210_USB as i32);
         
         task_run(blink_task());
+        timer_wait(2000000);
     }
     
     
@@ -283,8 +284,6 @@ pub extern "C" fn main_cold()
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
     println!("Done copy...");
-    
-    smmu_test();
 
     // Set up guest memory
     let lock = critical_start();

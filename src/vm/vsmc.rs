@@ -98,9 +98,11 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     }
 
 
-    if (smc_cmd == SMC_RWREGISTER && ctx[1] >= MC_BASE && ctx[1] < MC_END)
+    if (smc_cmd == SMC_RWREGISTER && smc_arg0 >= MC_BASE && smc_arg0 < MC_END)
     {
-        smmu_handle_rwreg(ctx);
+        if smmu_handle_rwreg(ctx) {
+            return retaddr;
+        }
         silence_print = true;
     }
     else if (smc_cmd == SMC_CONFIGURECARVEOUT)

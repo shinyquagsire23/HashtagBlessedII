@@ -498,3 +498,34 @@ impl SvcHandler for SvcCloseHandle
         return pre_ctx;
     }
 }
+
+#[async_trait]
+impl SvcHandler for SvcSetHeapSize
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        
+
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcQueryPhysicalAddress
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        let paddr_act = translate_el1_stage12(pre_ctx[1]);
+        
+        //
+        // Wait for SVC to complete
+        //
+        let mut post_ctx = SvcWait::new(pre_ctx).await;
+
+        post_ctx[1] = paddr_act;
+
+        return post_ctx;
+    }
+}
+
+

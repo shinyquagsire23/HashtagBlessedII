@@ -58,7 +58,7 @@ pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
         return ipaddr;
 */
 
-    let mut paddr = (ipaddr + 0x8000000);
+    let mut paddr = (ipaddr + 0x4000000);
     
 /*
     if (paddr >= 0x90000000 && paddr < 0x90400000)
@@ -79,6 +79,48 @@ pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
     }
 
     return paddr;
+}
+
+pub fn paddr_to_ipaddr(paddr: u64) -> u64
+{
+    let paddr_trunc = paddr & 0xFFFFFFFFF;
+    if (paddr_trunc < 0xD0000000) {
+        return paddr;
+    }
+
+    //if (ipaddr_trunc >= 0x84000000 && ipaddr_trunc < 0x86000000)
+        //return ipaddr;
+    //    return ipaddr = (ipaddr - 0x84000000 + 0xF0000000 );
+
+/*
+    if (ipaddr_trunc >= 0x90000000 && ipaddr_trunc < 0x90400000)
+        return ipaddr;
+    
+    if (ipaddr_trunc >= 0xC0000000 && ipaddr_trunc < 0xC0400000)
+        return ipaddr;
+*/
+
+    let mut ipaddr = (paddr - 0x4000000);
+    
+/*
+    if (paddr >= 0x90000000 && paddr < 0x90400000)
+        paddr += 0x400000;
+    
+    if (paddr >= 0xC0000000 && paddr < 0xC0400000)
+        paddr += 0x400000;
+*/
+
+    //if (paddr >= 0x84000000 && paddr < 0x86000000)
+    //    paddr += 0x2000000;
+    
+    //if (paddr >= 0xF0000000 && paddr < 0xF2000000)
+    //    paddr = (paddr - 0xF0000000 + 0x84000000);
+
+    if (ipaddr > 0x200000000 + 0x4000000) {
+        ipaddr = 0;
+    }
+
+    return ipaddr;
 }
 
 pub fn vttbr_init()

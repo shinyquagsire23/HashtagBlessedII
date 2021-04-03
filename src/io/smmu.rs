@@ -40,7 +40,7 @@ pub const MC_SMMU_SDMMC2A_ASID: u64 = (MC_BASE + 0xA98);
 pub const MC_SMMU_SDMMC3A_ASID: u64 = (MC_BASE + 0xA9C);
 pub const MC_SMMU_SDMMC4A_ASID: u64 = (MC_BASE + 0xAA0);
 
-pub const SMMU_NUM_PAGES: usize = 0x100;
+pub const SMMU_NUM_PAGES: usize = 0x400;
 
 static mut LAST_MC_SMMU_PTC_FLUSH_HI: u32 = 0;
 
@@ -73,6 +73,18 @@ pub fn smmu_init()
 {
     let ahb_arb_disable: MMIOReg = MMIOReg::new(AHB_ARBITRATION_DISABLE);
     
+    /*unsafe
+    {
+    SMMU_PAGES = SMMUPages([0; 1024 * SMMU_NUM_PAGES]);
+    SMMU_PAGE_ALLOCBITMAP = [0; SMMU_NUM_PAGES/8];
+    SMMU_CURRENT_ASID = 0;
+    PTB_HOS_ASIDS = [0; 0x80];
+    PTB_HTB_ASIDS = [0; 0x80];
+    ASID_BASES = [0; 0x80];
+    ASID_BUFFERS = [0; 0x80];
+    SMMU_PAGE_MAPPINGS = BTreeMap::new();
+    }*/
+    
     // TODO actual init
     
     // Allow usbd regs to be arbitrated
@@ -85,6 +97,8 @@ pub fn smmu_print_err()
     let status = smmu_readreg(MC_ERR_STATUS);
     let addr = smmu_readreg(MC_ERR_ADR);
     smmu_writereg(MC_BASE, smmu_readreg(MC_BASE));
+    smmu_writereg(MC_BASE, 0);
+    smmu_writereg(MC_BASE+4, 0);
 
     let err_id = status & 0xFF;
     let err_adr1 = (status >> 12) & 7;
@@ -180,6 +194,24 @@ pub fn smmu_find_hyp_mapping_from_hos(hos: u64) -> u64
     return 0;
 }
 
+pub fn smmu_find_hos_mapping_from_hyp(hyp: u64) -> u64
+{
+    let mut hos: u64 = 0;
+    unsafe
+    {
+        for (key, val) in &SMMU_PAGE_MAPPINGS
+        {
+            if *val == hyp
+            {
+                hos = *key;
+                break;
+            }
+        }
+        return hos;
+    }
+    return 0;
+}
+
 pub fn smmu_freetable(smmu_tlb: u64, level: i32)
 {
     for i in 0..(0x1000/4)
@@ -190,40 +222,18 @@ pub fn smmu_freetable(smmu_tlb: u64, level: i32)
             continue;
         }
 
-        //printf("freeing @ lv{} (asid %02x): {:016x}: {:08x}\n\r", level, SMMU_CURRENT_ASID, curaddr, tblval);
+        //printf("freeing @ lv{} (asid {:02x}): {:016x}: {:08x}\n\r", level, SMMU_CURRENT_ASID, curaddr, tblval);
         
         let smmu_pa = ((tblval & 0x3fffff) as u64) << 12;
 
         if ((tblval & 0x10000000) != 0) // page table
         {
-            //printf("freeing @ lv{} (asid %02x): lv{} page table {:016x}\n\r", level, SMMU_CURRENT_ASID, level+1, smmu_pa);
+            //printf("freeing @ lv{} (asid {:02x}): lv{} page table {:016x}\n\r", level, SMMU_CURRENT_ASID, level+1, smmu_pa);
             smmu_freetable(smmu_pa, level + 1);
             smmu_freepage(smmu_pa);
         }
         poke32(curaddr, 0);
     }
-}
-
-pub fn smmu_translatetlb_ent(smmu_tlb: u64)
-{
-    let curaddr = smmu_tlb;
-    let tblval = peek32(curaddr);
-    if (tblval == 0) {
-        return;
-    }
-
-    let smmu_ipa = ((tblval & 0x3fffff) as u64) << 12;
-    let smmu_pa = ipaddr_to_paddr(smmu_ipa);
-
-    if ((tblval & 0x10000000) != 0) // page table
-    {
-        poke32(curaddr, (tblval & !0x3fffff) | (smmu_pa >> 12) as u32);
-    }
-    else
-    {
-        poke32(curaddr, (tblval & !0x3fffff) | (smmu_pa >> 12) as u32);
-    }
-    dcache_flush(smmu_tlb,0x4);
 }
 
 pub fn smmu_translatetlb(smmu_tlb: u64, baseaddr: u32, level: i32)
@@ -242,21 +252,24 @@ pub fn smmu_translatetlb(smmu_tlb: u64, baseaddr: u32, level: i32)
             let smmu_ipa = ((tblval & 0x3fffff) as u64) << 12;
             let smmu_pa = ipaddr_to_paddr(smmu_ipa);
             
+            if smmu_pa == 0 {
+                println_core!("!! SMMU is mapping unavailable page {:x} !!", smmu_ipa);
+            }
+            
             //if (level == 0)
-            //    printf("translating @ lv{} (asid %02x): {:016x}: {:08x} (ipa {:08x} pa {:08x} va {:08x})\n\r", level, SMMU_CURRENT_ASID, curaddr, tblval, smmu_ipa, smmu_pa, deviceaddr);
+            //    printf("translating @ lv{} (asid {:02x}): {:016x}: {:08x} (ipa {:08x} pa {:08x} va {:08x})\n\r", level, SMMU_CURRENT_ASID, curaddr, tblval, smmu_ipa, smmu_pa, deviceaddr);
             
             if ((tblval & 0x10000000) != 0) // page table
             {
                 let newpage = smmu_allocpage();
                 if (newpage == 0)
                 {
-                    println!("COULDN'T ALLOC SMMU PAGE!");
-                    unsafe { t210_reset(); }
+                    panic!("COULDN'T ALLOC SMMU PAGE!");
                 }
                 
                 smmu_map_pages(smmu_pa, newpage);
                 memcpy32(newpage, smmu_pa, 0x1000);
-                //printf("translating @ lv{} (asid %02x): lv{} page table translated: {:016x} -> {:016x}, supplanting {:016x}\n\r", level, SMMU_CURRENT_ASID, level+1, smmu_ipa, smmu_pa, newpage);
+                //printf("translating @ lv{} (asid {:02x}): lv{} page table translated: {:016x} -> {:016x}, supplanting {:016x}\n\r", level, SMMU_CURRENT_ASID, level+1, smmu_ipa, smmu_pa, newpage);
                 
                 poke32(curaddr, (tblval & !0x3fffff) | (newpage >> 12) as u32);
                 smmu_translatetlb(newpage, deviceaddr, level + 1);
@@ -264,7 +277,7 @@ pub fn smmu_translatetlb(smmu_tlb: u64, baseaddr: u32, level: i32)
             else
             {
                 //if ((!peek32(curaddr+4) || (i && !peek32(curaddr-4))) /*&& SMMU_CURRENT_ASID < 6*/)
-                //    printf("translating @ lv{} (asid %02x): lv{} block translated: {:016x} -> {:016x}, device addr {:08x}\n\r", level, SMMU_CURRENT_ASID, level, smmu_ipa, smmu_pa, deviceaddr);
+                //    printf("translating @ lv{} (asid {:02x}): lv{} block translated: {:016x} -> {:016x}, device addr {:08x}\n\r", level, SMMU_CURRENT_ASID, level, smmu_ipa, smmu_pa, deviceaddr);
 
                 if (SMMU_CURRENT_ASID == 5)
                 {
@@ -365,18 +378,35 @@ pub fn smmu_match_asid(addr: u64) -> i32
     }
 }
 
-pub fn smmu_handle_rwreg(ctx: &mut [u64])
+pub fn smmu_handle_rwreg(ctx: &mut [u64]) -> bool
 {
 unsafe{
     let reg = (ctx[1] & 0xFFFFFFFF) as u64;
     let is_write = (ctx[2] == 0xFFFFFFFF);
     let mut val = (ctx[3] & 0xFFFFFFFF) as u32;
 
-    //println_core!("smmu: rwreg {:08x} {} {:08x}", reg, if (is_write) { "<-" } else { "->" }, val);
+    if reg != 0x70019054 && reg != 0x700199b8 && reg != 0x70019034 {
+        //println_core!("smmu: rwreg {:08x} {} {:08x}", reg, if (is_write) { "<-" } else { "->" }, val);
+    }
     
     if (!is_write) {
-        return;
+        if (reg == MC_SMMU_PTB_DATA)
+        {
+            val = smmu_readreg(reg);
+            let smmu_hyp = ((val & 0x3fffff) << 12) as u64;
+            let smmu_pa = smmu_find_hos_mapping_from_hyp(smmu_hyp);
+            let smmu_ipa = paddr_to_ipaddr(smmu_pa);
+            
+            val = (val & !0x3fffff) | (smmu_ipa >> 12) as u32;
+            
+            ctx[0] = 0;
+            ctx[1] = val as u64;
+            return true;
+        }
+        return false;
     }
+    
+    //return;
     
     if (reg == MC_SMMU_PTB_DATA)
     {
@@ -408,17 +438,18 @@ unsafe{
             println!("(core {}) FAILED TO MATCH SMMU PAGE! FORCING FLUSH ALL...", get_core());
             val &= !1;
             val &= 0xFFFFFFF0;
-            return;
+            ctx[3] = (val & 0xFFFFFFFF) as u64;
+            return false;
         }
 
-        let mut flushing_asid = smmu_match_asid(flushing_addr);
+        //let mut flushing_asid = smmu_match_asid(flushing_addr);
         let mut level = 0;
-        if (flushing_asid == -1)
+        //if (flushing_asid == -1)
         {
-            //println!("(core {}) FAILED TO IDENTIFY SMMU ASID! FALLBACK...", get_core());
+            //println!("(core {}) FAILED TO IDENTIFY SMMU ASID! FALLBACK... {:x}", get_core(), flushing_addr);
             
-            flushing_asid = SMMU_CURRENT_ASID as i32;
-            level = 1;
+            //flushing_asid = SMMU_CURRENT_ASID as i32;
+            //level = 1;
         }
         
         let smmu_hos = flushing_addr;
@@ -426,19 +457,18 @@ unsafe{
         
         if (smmu_hyp == 0)
         {
-            println!("HANGING...\n\r");
-            t210_reset();
+            panic!("HANGING...");
         }
         
         smmu_freetable(smmu_hyp, 0);
         memcpy32(smmu_hyp, smmu_hos, 0x1000);
         
-        //printf("(core {}) retranslate ASID %x ({:016x}, {:016x} {:08x})\n\r", get_core(), flushing_asid, flushing_addr, smmu_hyp, val);
+        //printf("(core {}) retranslate ASID {:x} ({:016x}, {:016x} {:08x})\n\r", get_core(), flushing_asid, flushing_addr, smmu_hyp, val);
         smmu_translatetlb(smmu_hyp, 0, level);
         
         if (matched_page == 0)
         {
-            //printf("(core {}) FAILED TO MATCH SMMU PAGE! FORCING FLUSH ALL...\n\r", get_core());
+            println!("(core {}) FAILED TO MATCH SMMU PAGE! FORCING FLUSH ALL...", get_core());
             val = val & !1;
         }
         else
@@ -452,17 +482,17 @@ unsafe{
     {
         let va = ((val >> 2) & 0x1FFFF) << 15;
         let asid_flush = ((val >> 24) & 0x1F) as u8;
-        //printf("(core {}) ASID %x buffer flush VA {:08x} %02x\n\r", get_core(), SMMU_CURRENT_ASID, va, asid_flush);
+        //println!("(core {}) ASID {:x} buffer flush VA {:08x} {:02x}\n\r", get_core(), SMMU_CURRENT_ASID, va, asid_flush);
     }
     else if (reg == MC_SMMU_PTB_ASID)
     {
         SMMU_CURRENT_ASID = (val & 0x7F) as u8;
-        //printf("(core {}) set ASID %x\n\r", get_core(), SMMU_CURRENT_ASID);
+        //println!("(core {}) set ASID {:x}", get_core(), SMMU_CURRENT_ASID);
     }
     else if (reg == MC_SMMU_PTC_FLUSH_1)
     {
         LAST_MC_SMMU_PTC_FLUSH_HI = val;
-        //printf("(core {}) ASID %x ptbl cache flush addr upper\n\r", get_core(), SMMU_CURRENT_ASID);
+        //println!("(core {}) ASID {:x} ptbl cache flush addr upper", get_core(), SMMU_CURRENT_ASID);
     }
     else if (reg == MC_SMMU_CONFIG)
     {
@@ -472,28 +502,33 @@ unsafe{
     {
         println!("DC ASID: {:08x}", val);
         DC_ASID = val & 0x3F;
+        smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC1A_ASID)
     {
         println!("SDMMC1A ASID: {:08x}", val);
+        smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC2A_ASID)
     {
         println!("SDMMC2A ASID: {:08x}", val);
         SDMMC_ASID = val & 0x3F;
+        smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC3A_ASID)
     {
         println!("SDMMC3A ASID: {:08x}", val);
+        smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC4A_ASID)
     {
         println!("SDMMC4A ASID: {:08x}", val);
+        smmu_print_err();
     }
 
     ctx[3] = (val & 0xFFFFFFFF) as u64;
 
-    return;
+    return false;
 }
 }
 
@@ -545,6 +580,7 @@ pub fn smmu_allocpage() -> u64
             return page;
         }
         
+        println_core!("!! Exhausted SMMU pages !!");
         return 0;
     }
 }

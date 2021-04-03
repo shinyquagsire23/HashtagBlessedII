@@ -20,7 +20,7 @@ include!(concat!(env!("OUT_DIR"), "/svc_gen.rs"));
 
 pub enum HorizonSvc {
     Invalid(SvcInvalid),
-    SetHeapSize(SvcDefaultHandler),
+    SetHeapSize(SvcSetHeapSize),
     SetMemoryPermission(SvcDefaultHandler),
     SetMemoryAttribute(SvcDefaultHandler),
     MapMemory(SvcDefaultHandler),
@@ -97,7 +97,7 @@ pub enum HorizonSvc {
     MapTransferMemory(SvcDefaultHandler),
     UnmapTransferMemory(SvcDefaultHandler),
     CreateInterruptEvent(SvcDefaultHandler),
-    QueryPhysicalAddress(SvcDefaultHandler),
+    QueryPhysicalAddress(SvcQueryPhysicalAddress),
     QueryIoMapping(SvcDefaultHandler),
     CreateDeviceAddressSpace(SvcDefaultHandler),
     AttachDeviceAddressSpace(SvcDefaultHandler),
@@ -147,7 +147,7 @@ impl HorizonSvc
     pub fn from_iss(iss: u32) -> HorizonSvc {
         let svc_u8 = (iss & 0xFF) as u8;
         match svc_u8 {
-            0x01 => HorizonSvc::SetHeapSize(SvcDefaultHandler),
+            0x01 => HorizonSvc::SetHeapSize(SvcSetHeapSize),
             0x02 => HorizonSvc::SetMemoryPermission(SvcDefaultHandler),
             0x03 => HorizonSvc::SetMemoryAttribute(SvcDefaultHandler),
             0x04 => HorizonSvc::MapMemory(SvcDefaultHandler),
@@ -224,7 +224,7 @@ impl HorizonSvc
             0x51 => HorizonSvc::MapTransferMemory(SvcDefaultHandler),
             0x52 => HorizonSvc::UnmapTransferMemory(SvcDefaultHandler),
             0x53 => HorizonSvc::CreateInterruptEvent(SvcDefaultHandler),
-            0x54 => HorizonSvc::QueryPhysicalAddress(SvcDefaultHandler),
+            0x54 => HorizonSvc::QueryPhysicalAddress(SvcQueryPhysicalAddress),
             0x55 => HorizonSvc::QueryIoMapping(SvcDefaultHandler),
             0x56 => HorizonSvc::CreateDeviceAddressSpace(SvcDefaultHandler),
             0x57 => HorizonSvc::AttachDeviceAddressSpace(SvcDefaultHandler),
