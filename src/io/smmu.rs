@@ -502,28 +502,28 @@ unsafe{
     {
         println!("DC ASID: {:08x}", val);
         DC_ASID = val & 0x3F;
-        smmu_print_err();
+        //smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC1A_ASID)
     {
         println!("SDMMC1A ASID: {:08x}", val);
-        smmu_print_err();
+        //smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC2A_ASID)
     {
         println!("SDMMC2A ASID: {:08x}", val);
         SDMMC_ASID = val & 0x3F;
-        smmu_print_err();
+        //smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC3A_ASID)
     {
         println!("SDMMC3A ASID: {:08x}", val);
-        smmu_print_err();
+        //smmu_print_err();
     }
     else if (reg == MC_SMMU_SDMMC4A_ASID)
     {
         println!("SDMMC4A ASID: {:08x}", val);
-        smmu_print_err();
+        //smmu_print_err();
     }
 
     ctx[3] = (val & 0xFFFFFFFF) as u64;

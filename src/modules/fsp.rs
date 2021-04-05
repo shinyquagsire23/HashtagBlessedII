@@ -119,10 +119,10 @@ async fn handle_fsp(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
             let resp = hipc_get_packet();
     
             // Try to hook first handle/domain if it exists
-            if (resp.hook_first_handle(handle, handle_ifilesystem_boxed))
+            /*if (resp.hook_first_handle(handle, handle_ifilesystem_boxed))
             {
                 println_core!("fsp-ldr::OpenCodeFileSystem({:016x}, `{}`) from `{}`", tid, path, vsvc_get_curpid_name());
-            }
+            }*/
 
             return post_ctx;
         },

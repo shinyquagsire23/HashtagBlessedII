@@ -710,10 +710,17 @@ pub struct HIPCPacket
     unk2: u16,
     enable_handle: bool,
     handle_desc: Option<HIPCHandleDesc>,
-    static_descs: Vec<HIPCStaticDesc>,
+    
+    static_desc_start: u64,
+    send_desc_start: u64,
+    recv_desc_start: u64,
+    exch_desc_start: u64,
+    
+    /*static_descs: Vec<HIPCStaticDesc>,
     send_descs: Vec<HIPCSendRecvExchDesc>,
     recv_descs: Vec<HIPCSendRecvExchDesc>,
-    exch_descs: Vec<HIPCSendRecvExchDesc>,
+    exch_descs: Vec<HIPCSendRecvExchDesc>,*/
+    
     data_payload: HIPCPayload,
 }
 
@@ -749,44 +756,20 @@ impl HIPCPacket
         }
         
         // Unpack Static descriptors
-        let mut static_descs: Vec<HIPCStaticDesc> = Vec::with_capacity(num_static as usize);
-        for i in 0..num_static
-        {
-            let unpack_static: HIPCStaticDesc = HIPCStaticDesc::unpack(read_ptr);
-            read_ptr += unpack_static.packed_size();
-            
-            static_descs.push(unpack_static);
-        }
+        let static_desc_start = read_ptr;
+        read_ptr += 8 * num_static as u64;
         
         // Unpack Send descriptors
-        let mut send_descs: Vec<HIPCSendRecvExchDesc> = Vec::with_capacity(num_send as usize);
-        for i in 0..num_send
-        {
-            let unpack_desc: HIPCSendRecvExchDesc = HIPCSendRecvExchDesc::unpack(read_ptr);
-            read_ptr += unpack_desc.packed_size();
-            
-            send_descs.push(unpack_desc);
-        }
+        let send_desc_start = read_ptr;
+        read_ptr += 12 * num_send as u64;
         
         // Unpack Recv descriptors
-        let mut recv_descs: Vec<HIPCSendRecvExchDesc> = Vec::with_capacity(num_recv as usize);
-        for i in 0..num_recv
-        {
-            let unpack_desc: HIPCSendRecvExchDesc = HIPCSendRecvExchDesc::unpack(read_ptr);
-            read_ptr += unpack_desc.packed_size();
-            
-            recv_descs.push(unpack_desc);
-        }
+        let recv_desc_start = read_ptr;
+        read_ptr += 12 * num_recv as u64;
         
         // Unpack Exchange descriptors
-        let mut exch_descs: Vec<HIPCSendRecvExchDesc> = Vec::with_capacity(num_exch as usize);
-        for i in 0..num_exch
-        {
-            let unpack_desc: HIPCSendRecvExchDesc = HIPCSendRecvExchDesc::unpack(read_ptr);
-            read_ptr += unpack_desc.packed_size();
-            
-            exch_descs.push(unpack_desc);
-        }
+        let exch_desc_start = read_ptr;
+        read_ptr += 12 * num_exch as u64;
         
         let hipc_payload: HIPCPayload;
 
@@ -820,10 +803,10 @@ impl HIPCPacket
             unk2: unk2,
             enable_handle: enable_handle,
             handle_desc: handle_desc,
-            static_descs: static_descs,
-            send_descs: send_descs,
-            recv_descs: recv_descs,
-            exch_descs: exch_descs,
+            static_desc_start: static_desc_start,
+            send_desc_start: send_desc_start,
+            recv_desc_start: recv_desc_start,
+            exch_desc_start: exch_desc_start,
             data_payload: hipc_payload,
         }
     }
@@ -968,8 +951,8 @@ impl HIPCPacket
     
     pub fn get_static(&self, idx: usize) -> Option<HIPCStaticDesc>
     {
-        if idx < self.static_descs.len() {
-            return Some(self.static_descs[idx]);
+        if idx < self.num_static as usize {
+            return Some(HIPCStaticDesc::unpack(self.static_desc_start + (idx*8) as u64));
         }
         return None;
     }

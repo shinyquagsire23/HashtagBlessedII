@@ -9,6 +9,8 @@
 extern crate rusb;
 extern crate ncurses;
 
+mod file_cmd;
+
 use std::thread;
 use std::time;
 use std::str;
@@ -19,17 +21,26 @@ use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::flag;
 use ncurses::*;
 use binread::{BinRead, io::Cursor};
+use crate::file_cmd::file_cmd_handle;
+use std::string::String;
 
 const VID_NINTENDO: u16 = 0x057e;
 const PID_SWITCH: u16 = 0x2000;
 
 #[derive(BinRead)]
 #[br(magic = b"\x01")]
-struct UsbCmdPacket {
+pub struct UsbCmdPacket {
     pkt_len: u8,
 
     #[br(little, count = pkt_len)]
     data: Vec<u8>,
+}
+
+pub struct UsbCtx {
+    handle: rusb::DeviceHandle<rusb::GlobalContext>,
+    ep_in_num: u8,
+    ep_out_num: u8,
+    log_buf: String
 }
 
 #[macro_use]
@@ -131,7 +142,7 @@ fn find_device() -> Option<(rusb::DeviceHandle<rusb::GlobalContext>, u8, u8, u8)
     return Some((handle_unwrap, iface_num, ep_in_num, ep_out_num));
 }
 
-fn process_input(input_buf: &[u8; 64], n: usize)
+fn process_input(ctx: &mut UsbCtx, input_buf: &[u8; 64], n: usize)
 {
     if input_buf[0] == 1 {
         let mut reader = Cursor::new(input_buf.clone());
@@ -141,6 +152,12 @@ fn process_input(input_buf: &[u8; 64], n: usize)
             if pkt.data[0] == 0xFF
             {
 
+            }
+            else if pkt.data[0] == 0 {
+                println!("[Host] Connection is recovered");
+            }
+            else if pkt.data[0] == 1 {
+                file_cmd_handle(ctx, &pkt);
             }
         }
         else
@@ -156,6 +173,7 @@ fn process_input(input_buf: &[u8; 64], n: usize)
     else
     {
         let mut null_term = 0;
+        let mut last_newline = 0;
         loop
         {
             if null_term >= n {
@@ -165,22 +183,45 @@ fn process_input(input_buf: &[u8; 64], n: usize)
             if input_buf[null_term] == 0 {
                 break
             }
+            
+            if input_buf[null_term] == '\n' as u8 {
+                last_newline = null_term;
+            }
             null_term += 1;
         }
         
+        // the \r\n escape code can sometimes cause lines to get dropped if
+        // a packet splits exactly between the two and the replace below doesn't happen,
+        // prevent a line from being logged immediately if it ends in \r 
+        if null_term != 0 && input_buf[null_term-1] == '\r' as u8 {
+            let read_str = str::from_utf8(&input_buf[(last_newline+1)..null_term]);
+            if read_str.is_ok() {
+                let unwrapped = read_str.unwrap();
+                ctx.log_buf = ctx.log_buf.clone() + &String::from(unwrapped);
+            }
+            null_term = last_newline;
+        }
+        
+        if null_term == 0 {
+            return;
+        }
+
         let read_str = str::from_utf8(&input_buf[..null_term]);
         if read_str.is_ok() {
-            let read_str_good = str::replace(read_str.unwrap(), "\r\n", "\n");
+            let unwrapped = ctx.log_buf.clone() + &String::from(read_str.unwrap());
+            
+            let read_str_good = unwrapped.replace("\r\n", "\n");
             print!("{}", read_str_good);
+            ctx.log_buf = String::from("");
         }
     }
 }
 
-fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u8, ep_out_num: u8) -> bool
+fn run_device(ctx: &mut UsbCtx) -> bool
 {
     let mut input_buf: [u8; 64] = [0; 64];
     
-    match handle.read_bulk(ep_in_num, &mut input_buf, time::Duration::from_millis(1)) {
+    match ctx.handle.read_bulk(ctx.ep_in_num, &mut input_buf, time::Duration::from_millis(1)) {
         Err(e) => {
             if e == rusb::Error::NoDevice {
                 return false;
@@ -191,7 +232,7 @@ fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u
             //println!("Read {} bytes", n);
             
             if n >= 1 {
-                process_input(&input_buf, n);
+                process_input(ctx, &input_buf, n);
             }
         },
     };
@@ -206,7 +247,7 @@ fn run_device(handle: &mut rusb::DeviceHandle<rusb::GlobalContext>, ep_in_num: u
         println!("{:x}", ch_str.as_bytes()[i]);
     }*/
     
-    match handle.write_bulk(ep_out_num, ch_str.as_bytes(), time::Duration::from_millis(10)) {
+    match ctx.handle.write_bulk(ctx.ep_out_num, ch_str.as_bytes(), time::Duration::from_millis(10)) {
         Err(_e) => {
             println!("write err {}", _e);
         },
@@ -281,9 +322,16 @@ fn main() -> Result<(), Error>
             },
         };
         
+        let mut ctx: UsbCtx = UsbCtx {
+            handle: handle,
+            ep_in_num: ep_in_num,
+            ep_out_num: ep_out_num,
+            log_buf: String::new()
+        };
+        
         while !term_now.load(Ordering::Relaxed)
         {
-            if !run_device(&mut handle, ep_in_num, ep_out_num)
+            if !run_device(&mut ctx)
             {
                 println!("Lost connection with device, attempting reconnect...");
                 break;

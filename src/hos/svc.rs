@@ -60,7 +60,7 @@ pub enum HorizonSvc {
     Break(SvcBreak),
     OutputDebugString(SvcOutputDebugString),
     ReturnFromException(SvcDefaultHandler),
-    GetInfo(SvcDefaultHandler),
+    GetInfo(SvcGetInfo),
     FlushEntireDataCache(SvcDefaultHandler),
     FlushDataCache(SvcDefaultHandler),
     MapPhysicalMemory(SvcDefaultHandler), // 3.0.0+
@@ -123,7 +123,7 @@ pub enum HorizonSvc {
     WriteDebugProcessMemory(SvcDefaultHandler),
     SetHardwareBreakPoint(SvcDefaultHandler),
     GetDebugThreadParam(SvcDefaultHandler),
-    GetSystemInfo(SvcDefaultHandler), // 5.0.0+
+    GetSystemInfo(SvcGetSystemInfo), // 5.0.0+
     CreatePort(SvcDefaultHandler),
     ManageNamedPort(SvcManageNamedPort),
     ConnectToPort(SvcDefaultHandler),
@@ -138,7 +138,7 @@ pub enum HorizonSvc {
     TerminateProcess(SvcTerminateProcess),
     GetProcessInfo(SvcDefaultHandler),
     CreateResourceLimit(SvcDefaultHandler),
-    SetResourceLimitLimitValue(SvcDefaultHandler),
+    SetResourceLimitLimitValue(SvcSetResourceLimitLimitValue),
     CallSecureMonitor(SvcDefaultHandler),
 }
 
@@ -187,7 +187,7 @@ impl HorizonSvc
             0x26 => HorizonSvc::Break(SvcBreak),
             0x27 => HorizonSvc::OutputDebugString(SvcOutputDebugString),
             0x28 => HorizonSvc::ReturnFromException(SvcDefaultHandler),
-            0x29 => HorizonSvc::GetInfo(SvcDefaultHandler),
+            0x29 => HorizonSvc::GetInfo(SvcGetInfo),
             0x2A => HorizonSvc::FlushEntireDataCache(SvcDefaultHandler),
             0x2B => HorizonSvc::FlushDataCache(SvcDefaultHandler),
             0x2C => HorizonSvc::MapPhysicalMemory(SvcDefaultHandler),
@@ -250,7 +250,7 @@ impl HorizonSvc
             0x6B => HorizonSvc::WriteDebugProcessMemory(SvcDefaultHandler),
             0x6C => HorizonSvc::SetHardwareBreakPoint(SvcDefaultHandler),
             0x6D => HorizonSvc::GetDebugThreadParam(SvcDefaultHandler),
-            0x6F => HorizonSvc::GetSystemInfo(SvcDefaultHandler),
+            0x6F => HorizonSvc::GetSystemInfo(SvcGetSystemInfo),
             0x70 => HorizonSvc::CreatePort(SvcDefaultHandler),
             0x71 => HorizonSvc::ManageNamedPort(SvcManageNamedPort),
             0x72 => HorizonSvc::ConnectToPort(SvcDefaultHandler),
@@ -265,7 +265,7 @@ impl HorizonSvc
             0x7B => HorizonSvc::TerminateProcess(SvcTerminateProcess),
             0x7C => HorizonSvc::GetProcessInfo(SvcDefaultHandler),
             0x7D => HorizonSvc::CreateResourceLimit(SvcDefaultHandler),
-            0x7E => HorizonSvc::SetResourceLimitLimitValue(SvcDefaultHandler),
+            0x7E => HorizonSvc::SetResourceLimitLimitValue(SvcSetResourceLimitLimitValue),
             0x7F => HorizonSvc::CallSecureMonitor(SvcDefaultHandler),
             _  =>  HorizonSvc::Invalid(SvcInvalid),
         }

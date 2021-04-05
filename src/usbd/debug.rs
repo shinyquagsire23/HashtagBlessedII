@@ -33,6 +33,8 @@ pub struct DebugGadget
     if0_epBulkIn: u8,
     cmd_buf: spin::Mutex<String>,
     log_buf: spin::Mutex<Option<VecDeque<u8>>>,
+    bincmd_buf: spin::Mutex<Option<VecDeque<u8>>>,
+    bincmd_toread: u8,
 }
 
 impl DebugGadget
@@ -50,6 +52,8 @@ impl DebugGadget
             if0_epBulkIn: 0xff,
             cmd_buf: spin::Mutex::new(String::new()),
             log_buf: spin::Mutex::new(None),
+            bincmd_buf: spin::Mutex::new(None),
+            bincmd_toread: 0,
         }
     }
 }
@@ -155,6 +159,30 @@ pub fn debug_process_cmd()
     }
     
     command_full.clear();
+}
+
+pub fn debug_dispatch_bincmd()
+{
+    let debug = get_debug();    
+    if (!debug.isactive) { return; }
+
+    let mut lock = debug.bincmd_buf.lock();
+    let mut bincmd_buf = lock.as_mut().unwrap();
+    let bincmd_size = bincmd_buf.len();
+    
+    if bincmd_size <= 0 {
+        return;
+    }
+    
+    let bincmd_cmd = bincmd_buf[0];
+    match bincmd_cmd {
+        0 => {},
+        1 => {
+        }
+        _ => {
+            println_core!("debug: Received unknown debug cmd {:x}, pkt len {:x}", bincmd_cmd, bincmd_size);
+        }
+    }
 }
 
 pub fn debug_disable()
@@ -312,8 +340,9 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
     }
     
     // Parse binary command
-    if pkt_data.read() == 1 {
-        
+    if pkt_data.read() == 1 && len >= 2 {
+        let bincmd_len = pkt_data.offset(1).read();
+        debug.bincmd_toread = bincmd_len;
         return;
     }
     
@@ -322,6 +351,22 @@ pub fn debug_if0_recvcomplete(usbd: &mut UsbDevice, epNum: u8)
     for i in 0..(len as usize)
     {
         let val = pkt_data.offset(i as isize).read();
+        
+        if debug.bincmd_toread > 0 {
+            {
+                let mut lock = debug.bincmd_buf.lock();
+                let mut bincmd_buf = lock.as_mut().unwrap();
+        
+                bincmd_buf.push_back(val);
+            }
+            
+            debug.bincmd_toread -= 1;
+            if debug.bincmd_toread <= 0 {
+                debug_dispatch_bincmd();
+            }
+            continue;
+        }
+        
         if (val == 0) { continue; }
         
         if (val == '\n' as u8)
@@ -457,9 +502,18 @@ pub fn debug_reset_hook(usbd: &mut UsbDevice)
     let command = &mut *debug.cmd_buf.lock();
     command.clear();
     
+    {
     let mut lock = debug.log_buf.lock();
     let mut log_buf = lock.as_mut().unwrap();
     log_buf.clear();
+    }
+    
+    {
+    let mut lock = debug.bincmd_buf.lock();
+    let mut bincmd_buf = lock.as_mut().unwrap();
+    bincmd_buf.clear();
+    }
+    debug.bincmd_toread = 0;
     
     logger_clear_unprocessed();
 }
@@ -487,6 +541,8 @@ pub fn debug_init()
     
     debug.log_buf = spin::Mutex::new(Some(VecDeque::new()));
     debug.cmd_buf = spin::Mutex::new(String::new());
+    debug.bincmd_buf = spin::Mutex::new(Some(VecDeque::new()));
+    debug.bincmd_toread = 0;
 
     // We allocate two interfaces, one has an interrupt EP (unused?) 
     // and the other has two bulk endpoints for each direction

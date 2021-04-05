@@ -347,7 +347,6 @@ impl SvcHandler for SvcSleepSystem
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
         println_uarta!("svcSleepSystem({}) STUB", vsvc_get_curpid_name());
-        crate::io::timer::timer_wait(1000000);
         
         return pre_ctx;
     }
@@ -474,6 +473,13 @@ impl SvcHandler for SvcReplyAndReceive
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
+        /*let pkt = hipc_get_packet();
+        let error = pkt.get_cmd_id();
+        
+        if error != 0 && error != 0x202 && error != 0xe02 && error != 0x402 && error != 0x408 {
+            //println_core!("svcReplyAndReceive from `{}` returning error {:x}", vsvc_get_curpid_name(), pkt.get_cmd_id());
+        }*/
+        
         return pre_ctx;
     }
 }
@@ -500,32 +506,137 @@ impl SvcHandler for SvcCloseHandle
 }
 
 #[async_trait]
-impl SvcHandler for SvcSetHeapSize
-{
-    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
-    {
-        
-
-        return pre_ctx;
-    }
-}
-
-#[async_trait]
 impl SvcHandler for SvcQueryPhysicalAddress
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        let paddr_act = translate_el1_stage12(pre_ctx[1]);
+        /*let paddr_act = translate_el1_stage12(pre_ctx[1]);
         
         //
         // Wait for SVC to complete
         //
         let mut post_ctx = SvcWait::new(pre_ctx).await;
 
-        post_ctx[1] = paddr_act;
+        //post_ctx[1] = paddr_act;
 
-        return post_ctx;
+        return post_ctx;*/
+        return pre_ctx;
     }
 }
 
+#[async_trait]
+impl SvcHandler for SvcGetSystemInfo
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        /*let info_type = pre_ctx[1];
+        let info_subtype = pre_ctx[3];
+        
+        //
+        // Wait for SVC to complete
+        //
+        let mut post_ctx = SvcWait::new(pre_ctx).await;
+        
+        //println_core!("svcGetSystemInfo({},{}) from `{}` -> {:x}", info_type, info_subtype, vsvc_get_curpid_name(), post_ctx[1]);
+        
+        // return less on TotalPhysicalMemorySize_Application to prevent app
+        // from allocating beyond end of RAM
+        if info_type == 0 && info_subtype == 0 {
+            post_ctx[1] -= 0x4000000;
+        }
+
+        return post_ctx;*/
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcGetInfo
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        /*let info_type = pre_ctx[1];
+        let info_subtype = pre_ctx[3];
+        
+        //
+        // Wait for SVC to complete
+        //
+        let mut post_ctx = SvcWait::new(pre_ctx).await;
+        
+        //println_core!("svcGetInfo({},{}) from `{}` -> {:x}", info_type, info_subtype, vsvc_get_curpid_name(), post_ctx[1]);
+        
+        // Don't mess with applets/sysmodules
+        if vsvc_get_curpid() <= 128 {
+            return post_ctx;
+        }
+        
+        // return less on TotalPhysicalMemorySize_Application to prevent app
+        // from allocating beyond end of RAM
+        if info_type == 21 && info_subtype == 0 {
+            //post_ctx[1] -= 0x8000000;
+        }
+        else if info_type == 7 && info_subtype == 0 { // Pretend that the code executable is larger
+            //post_ctx[1] += 0x4000000;
+        }
+
+        return post_ctx;*/
+        return pre_ctx;
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcSetHeapSize
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        return pre_ctx;
+        /*let size = pre_ctx[1];
+        
+        if vsvc_get_curpid() > 128 && pre_ctx[1] >= 0xc6800000 {
+            //pre_ctx[1] += 0x200000;
+        }
+        
+        //
+        // Wait for SVC to complete
+        //
+        let mut post_ctx = SvcWait::new(pre_ctx).await;
+        
+        // Crash Bandicoot is c7e00000
+        // ARMS is ca800000
+        println_core!("svcSetHeapSize({:x}) from `{}` -> {:x},{:x}", size, vsvc_get_curpid_name(), post_ctx[1], post_ctx[0]);
+
+        return post_ctx;*/
+    }
+}
+
+#[async_trait]
+impl SvcHandler for SvcSetResourceLimitLimitValue
+{
+    async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
+    {
+        let resource = pre_ctx[1];
+        let mut val = pre_ctx[2];
+        
+        if resource == 0 && val >= 0xcd500000 {
+            //val -= 0x4000000;
+        }
+        else if resource == 0 && val == 0x1fb00000 {
+            //val -= 0x1000000;
+        }
+        
+        pre_ctx[2] = val;
+        
+        return pre_ctx;
+        /*
+        //
+        // Wait for SVC to complete
+        //
+        let mut post_ctx = SvcWait::new(pre_ctx).await;
+        
+        //println_core!("svcSetResourceLimitLimitValue({:x}, {:x}) from `{}` -> {:x}", resource, val, vsvc_get_curpid_name(), post_ctx[0]);
+
+        return post_ctx;*/
+        
+    }
+}
 

@@ -39,6 +39,8 @@ static mut VTTBR_LV1: Lv1TTB = Lv1TTB([0; 64]);
 static mut VTTBR_LV2_SLAB: Lv2TTB = Lv2TTB([0; 0x200*0x800]);
 static mut VTTBR_LV3_SLAB: Lv3TTB = Lv3TTB([0; 0x200*0x2000]);
 
+pub const TOTAL_HTB_SIZE: u64 = 0x4000000;
+
 pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
 {
     let ipaddr_trunc = ipaddr & 0xFFFFFFFFF;
@@ -58,7 +60,7 @@ pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
         return ipaddr;
 */
 
-    let mut paddr = (ipaddr + 0x4000000);
+    let mut paddr = (ipaddr + TOTAL_HTB_SIZE);
     
 /*
     if (paddr >= 0x90000000 && paddr < 0x90400000)
@@ -100,7 +102,7 @@ pub fn paddr_to_ipaddr(paddr: u64) -> u64
         return ipaddr;
 */
 
-    let mut ipaddr = (paddr - 0x4000000);
+    let mut ipaddr = (paddr - TOTAL_HTB_SIZE);
     
 /*
     if (paddr >= 0x90000000 && paddr < 0x90400000)
@@ -116,7 +118,7 @@ pub fn paddr_to_ipaddr(paddr: u64) -> u64
     //if (paddr >= 0xF0000000 && paddr < 0xF2000000)
     //    paddr = (paddr - 0xF0000000 + 0x84000000);
 
-    if (ipaddr > 0x200000000 + 0x4000000) {
+    if (ipaddr > 0x200000000 + TOTAL_HTB_SIZE) {
         ipaddr = 0;
     }
 

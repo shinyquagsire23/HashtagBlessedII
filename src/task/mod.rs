@@ -132,6 +132,8 @@ pub fn task_run_svc(thread_ctx: u64, future: impl Future<Output = ([u64; 32])> +
         let mut executor = SVC_EXECUTOR[get_core() as usize].as_mut().unwrap();
         let task = SvcTask::new(thread_ctx, future);
         let task_id = task.id;
+        
+        // TODO clean up on svcExitProcess?
         if !executor.task_exists(&task) {
             executor.queue(task);
         }

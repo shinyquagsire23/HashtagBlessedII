@@ -236,6 +236,8 @@ pub extern "C" fn main_cold()
     //
     println!("Begin copy to {:016x}... {:x}", ipaddr_to_paddr(KERNEL_START), peek32(to_u64ptr!(&KERN_DATA[0])));
     memcpy32(ipaddr_to_paddr(KERNEL_START), to_u64ptr!(&KERN_DATA[0]), KERN_DATA.len());
+    
+    log_cmd(&[1, 1, 1]);
 
     // Set up SVC pre/post hooks
     let daifclr_2_instr: u32 = 0xd50342ff;
