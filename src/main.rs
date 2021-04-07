@@ -257,8 +257,8 @@ pub extern "C" fn main_cold()
             println!("Hooking addr {:016x}", search);
             if (peek32(search + 4) == 0xd63f0160) // A64
             {
-                poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
-                poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
+                //poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
+                //poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
                 a64_hooked = true;
             }
             else if (peek32(search + 4) == 0xd63f0260) // A32
@@ -333,7 +333,7 @@ async fn blink_task()
             log_cmd(&[1, 1, 0xFF]);
         }
         
-        SleepNs::new(ms_to_ns(100)).await;
+        SleepNs::new(ms_to_ns(200)).await;
     }
 }
 
@@ -370,7 +370,7 @@ fn on_panic(panic_info: &PanicInfo) -> ! {
     println_uarta!("{}", panic_info);
     println_unsafe!("{}", panic_info);
 
-    timer_wait(1000000);
+    timer_wait(4000000);
     unsafe { t210_reset(); }
     loop{}
 }

@@ -39,7 +39,56 @@ static mut VTTBR_LV1: Lv1TTB = Lv1TTB([0; 64]);
 static mut VTTBR_LV2_SLAB: Lv2TTB = Lv2TTB([0; 0x200*0x800]);
 static mut VTTBR_LV3_SLAB: Lv3TTB = Lv3TTB([0; 0x200*0x2000]);
 
-pub const TOTAL_HTB_SIZE: u64 = 0x4000000;
+pub const TOTAL_HTB_SIZE: u64 = 0x8000000;
+
+/*
+pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
+{
+    return ipaddr;
+    
+    let ipaddr_trunc = ipaddr & 0xFFFFFFFFF;
+    if (ipaddr_trunc < 0xD0000000) {
+        return ipaddr;
+    }
+    else if ipaddr_trunc >= 0xD0000000 && ipaddr_trunc < (0xD0000000 + TOTAL_HTB_SIZE) {
+        return (ipaddr_trunc-0xD0000000)+(0x180000000-TOTAL_HTB_SIZE);
+    }
+    else if ipaddr_trunc >= (0x180000000-TOTAL_HTB_SIZE) {
+        return ipaddr + TOTAL_HTB_SIZE;
+    }
+
+    let mut paddr = ipaddr;//(ipaddr + TOTAL_HTB_SIZE);
+
+    if (paddr > 0x200000000) {
+        paddr = 0;
+    }
+
+    return paddr;
+}
+
+pub fn paddr_to_ipaddr(paddr: u64) -> u64
+{
+    let paddr_trunc = paddr & 0xFFFFFFFFF;
+    if (paddr_trunc < 0xD0000000) {
+        return paddr;
+    }
+    else if paddr_trunc >= 0xD0000000 && paddr_trunc < (0xD0000000 + TOTAL_HTB_SIZE) {
+        return 0;
+    }
+    else if paddr_trunc >= (0x180000000-TOTAL_HTB_SIZE) {
+        return paddr - (0x180000000-TOTAL_HTB_SIZE) + 0xD0000000;
+    }
+
+
+    let mut ipaddr = paddr;//(paddr - TOTAL_HTB_SIZE);
+
+    if (ipaddr > 0x200000000) {
+        ipaddr = 0;
+    }
+
+    return ipaddr;
+}
+*/
 
 pub fn ipaddr_to_paddr(ipaddr: u64) -> u64
 {

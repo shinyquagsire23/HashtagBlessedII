@@ -454,7 +454,10 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             ctx[38] &= !0x80;
 
             //TODO
-            ret_addr = vsvc_pre_handle(iss, ctx);
+            ret_addr = elr_el2;
+            if (get_core() == 3) {
+                ret_addr = vsvc_pre_handle(iss, ctx);
+            }
         }
         else if (hvc_num == 2) // SVC post-hook
         {
@@ -462,7 +465,10 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             ctx[38] |= 0x80;
 
             //TODO
-            ret_addr = vsvc_post_handle(iss, ctx);
+            ret_addr = elr_el2;
+            if (get_core() == 3) {
+                ret_addr = vsvc_post_handle(iss, ctx);
+            }
         }
         else if (hvc_num == 3)
         {

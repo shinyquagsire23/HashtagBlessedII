@@ -489,7 +489,7 @@ impl SvcHandler for SvcSendSyncRequest
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        return ipc_handle_syncrequest(pre_ctx).await;
+        return pre_ctx;//ipc_handle_syncrequest(pre_ctx).await;
     }
 }
 

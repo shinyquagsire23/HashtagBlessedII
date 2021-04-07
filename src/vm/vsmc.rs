@@ -247,7 +247,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_PROGRAMVERIFY)
     {
         ctx[0] = 0;
-        ctx[1] |= 1;//1;
+        ctx[1] |= 0;//1;
     }
     else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_KERNELCONFIG)
     {
