@@ -257,8 +257,8 @@ pub extern "C" fn main_cold()
             println!("Hooking addr {:016x}", search);
             if (peek32(search + 4) == 0xd63f0160) // A64
             {
-                //poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
-                //poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
+                poke32(search + 0, 0xd4000002 | (1 << 5)); // HVC #1 instruction
+                poke32(search + 8, 0xd4000002 | (2 << 5)); // HVC #2 instruction
                 a64_hooked = true;
             }
             else if (peek32(search + 4) == 0xd63f0260) // A32

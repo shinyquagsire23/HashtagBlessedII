@@ -56,6 +56,12 @@ pub struct HExtraString
 }
 
 #[derive(Clone)]
+pub struct HExtraU32
+{
+    pub val: u32
+}
+
+#[derive(Clone)]
 pub enum HObject
 {
     None(),
@@ -68,7 +74,8 @@ pub enum HObject
 pub enum HObjectExtra
 {
     None(HExtraNone),
-    String(HExtraString)
+    String(HExtraString),
+    U32(HExtraU32)
 }
 
 static mut DOMAINOBJ_TO_SESSION: BTreeMap<HDomainObj, Arc<Mutex<HDomainSession>>> = BTreeMap::new();
@@ -101,6 +108,12 @@ impl HObject
     {
         let extra = HExtraString { str: str.clone() };
         self.set_extra(HObjectExtra::String(extra));
+    }
+    
+    pub fn set_extra_u32(&self, val: u32)
+    {
+        let extra = HExtraU32 { val: val };
+        self.set_extra(HObjectExtra::U32(extra));
     }
 }
 
@@ -385,6 +398,11 @@ impl HIPCDomainPayload
         self.data.read_str(offs)
     }
     
+    pub fn write_u32(&self, offs: usize, val: u32)
+    {
+        self.data.write_u32(offs, val);
+    }
+    
     pub fn print(&self)
     {
         println!("Domain Payload:");
@@ -410,7 +428,9 @@ pub struct HIPCDataPayload
     version: u32,
     command: u32, // also error
     token: u32,
-    data: Vec<u8>,
+    //data: Vec<u8>,
+    data_ptr: u64,
+    data_len: u16
 }
 
 impl HIPCDataPayload
@@ -418,12 +438,12 @@ impl HIPCDataPayload
     pub fn unpack(buf: u64, data_size: u16) -> HIPCDataPayload
     {
         let mut buf_data = buf + 16;
-        let mut data: Vec<u8> = Vec::with_capacity((data_size-0x10) as usize);
+        /*let mut data: Vec<u8> = Vec::with_capacity((data_size-0x10) as usize);
         for i in 0..(data_size-0x10)
         {
             data.push(peek8(buf_data));
             buf_data += 1;
-        }
+        }*/
         
         HIPCDataPayload
         {
@@ -431,13 +451,15 @@ impl HIPCDataPayload
             version: peek32(buf + 4),
             command: peek32(buf + 8),
             token: peek32(buf + 12),
-            data: data
+            data_ptr: buf + 16,
+            data_len: (data_size - 16)
+            //data: data
         }
     }
     
     pub fn packed_size(&self) -> u64
     {
-        16 + self.data.len() as u64
+        16 + self.data_len as u64 //self.data.len() as u64
     }
     
     pub fn get_cmd_id(&self) -> u32
@@ -447,55 +469,61 @@ impl HIPCDataPayload
     
     pub fn read_u8(&self, offs: usize) -> u8
     {
-        self.data[offs]
+        peek8(self.data_ptr + (offs as u64))
+        //self.data[offs]
     }
     
     pub fn read_u16(&self, offs: usize) -> u16
     {
-        let mut bytes: [u8; 2] = [0;2];
+        /*let mut bytes: [u8; 2] = [0;2];
         for i in offs..offs+2
         {
             bytes[i] = self.data[i];
         }
-        u16::from_le_bytes(bytes)
+        u16::from_le_bytes(bytes)*/
+        peek16(self.data_ptr + (offs as u64))
     }
     
     pub fn read_u32(&self, offs: usize) -> u32
     {
-        let mut bytes: [u8; 4] = [0;4];
+        /*let mut bytes: [u8; 4] = [0;4];
         for i in offs..offs+4
         {
             bytes[i] = self.data[i];
         }
-        u32::from_le_bytes(bytes)
+        u32::from_le_bytes(bytes)*/
+        peek32(self.data_ptr + (offs as u64))
     }
     
     pub fn read_u64(&self, offs: usize) -> u64
     {
-        let mut bytes: [u8; 8] = [0;8];
+        /*let mut bytes: [u8; 8] = [0;8];
         for i in offs..offs+8
         {
             bytes[i] = self.data[i];
         }
-        u64::from_le_bytes(bytes)
+        u64::from_le_bytes(bytes)*/
+        peek64(self.data_ptr + (offs as u64))
     }
     
     pub fn read_str(&self, offs: usize) -> String
     {
-        let mut bytes: [u8; 4] = [0;4];
         let mut s_len = 0;
-        for i in offs..self.data.len()
+        for i in offs..(self.data_len as usize)
         {
-            if self.data[i] == 0
+            if peek8(self.data_ptr + i as u64) == 0
             {
                 break;
             }
             s_len += 1;
         }
-        unsafe { String::from(str::from_utf8_unchecked(&self.data[offs..s_len])) }
+        unsafe { String::from(str_from_null_terminated_utf8_u64ptr_unchecked_len(self.data_ptr + (offs as u64), s_len)) }
     }
     
-    
+    pub fn write_u32(&self, offs: usize, val: u32)
+    {
+        poke32(self.data_ptr + (offs as u64), val);
+    }
     
     pub fn print(&self)
     {
@@ -504,7 +532,7 @@ impl HIPCDataPayload
         println!("  Version: {}", self.version);
         println!("  Command/Error: {:x}", self.command);
         println!("  Token: {:x}", self.token);
-        hexdump_vec("Data Buf", &self.data);
+        //hexdump_vec("Data Buf", &self.data);
         // TODO data hexdump
     }
 }
@@ -941,6 +969,19 @@ impl HIPCPacket
         }
     }
     
+    pub fn write_u32(&self, offs: usize, val: u32)
+    {
+        match &self.data_payload
+        {
+            HIPCPayload::Session(session) => {
+                session.write_u32(offs, val);
+            },
+            HIPCPayload::Domain(domain) => {
+                domain.write_u32(offs, val);
+            }
+        }
+    }
+    
     pub fn get_handle(&self, idx: usize) -> Option<u32>
     {
         if let Some(desc) = &self.handle_desc {
@@ -988,7 +1029,7 @@ impl HIPCPacket
                     service_hsession.set_handler(handler);
                     
                     // Link new HClientSession to HOS handle
-                    hipc_register_handle_clientsession(session_handle, Arc::new(Mutex::new(service_hsession)));
+                    hipc_register_handle_clientsession(handle, Arc::new(Mutex::new(service_hsession)));
                     return true;
                 }
             }

@@ -114,15 +114,15 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
 {
     let mut gic: GIC = GIC::new();
 
-    let elr_el2 = ctx[39];
+    let elr_el2 = ctx[33];
     
     let hppir = gic.gicc.gicc_hppir.r32();
     let vcpu = ((hppir >> 10) & 0x7) as u8;
     let int_id = (hppir & 0x3FF) as u16;
     
-    if (get_core() == 0 && int_id < 16)
+    if (get_core() == 2 && int_id < 16)
     {
-        gic.enable_interrupt(IRQ_T210_USB, 0);
+        gic.enable_interrupt(IRQ_T210_USB, get_core());
         tegra_irq_en(20);
         gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
     }
@@ -135,17 +135,21 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
         
         let start = get_ticks();
         //TODO better place this?
-        if (get_core() == 0) {
+        if (get_core() == 2) {
             task_advance();
         }
         let end = get_ticks();
-        let total_ticks = end - start;
+        let mut total_ticks = end - start;
         unsafe 
         { 
             LAST_TASKING = ticks_to_ns(total_ticks);
             if (LAST_TASKING > LAST_TASKING_MAX) {
                 LAST_TASKING_MAX = LAST_TASKING;
             }
+        }
+        
+        if total_ticks > 0x30000 {
+            total_ticks = 0x3000;
         }
 
         sysreg_write!("cnthp_tval_el2", 0x30000 - total_ticks);
@@ -165,7 +169,7 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
     }
     else if (int_id == IRQ_T210_USB)
     {
-        if (get_core() == 0) {
+        if (get_core() == 2) {
             task_advance();
             irq_usb();
             task_advance();
@@ -184,7 +188,7 @@ pub fn virq_handle(ctx: &mut [u64]) -> u64
     let start_ticks = vsysreg_getticks();
     let mut end_ticks = start_ticks;
 
-    let elr_el2 = ctx[39];
+    let elr_el2 = ctx[33];
     
     let hppir = gic.gicc.gicc_hppir.r32();
     let rpr = gic.get_rpr();

@@ -22,6 +22,7 @@ use core::{future::Future, pin::Pin};
 use crate::hos::{hipc::*, hport::HPort, hhandle::HHandle, hclientsession::HClientSession, hclientsession::HClientSessionHandler};
 use spin::mutex::Mutex;
 use crate::modules::ipc::{ipc_handle_syncrequest, ipc_hook_namedport};
+use crate::hos::hsvc::hsvc_sleep_thread;
 
 use alloc::boxed::Box;
 use async_trait::async_trait;
@@ -252,7 +253,7 @@ pub fn vsvc_post_handle(iss: u32, ctx: &mut [u64]) -> u64
         }
         
         // emulate ff 42 03 d5     msr        DAIFClr,#0x2
-        ctx[38] &= !0x80;
+        ctx[32] &= !0x80;
         
         return ctx[31];
     }
@@ -476,8 +477,12 @@ impl SvcHandler for SvcReplyAndReceive
         /*let pkt = hipc_get_packet();
         let error = pkt.get_cmd_id();
         
-        if error != 0 && error != 0x202 && error != 0xe02 && error != 0x402 && error != 0x408 {
-            //println_core!("svcReplyAndReceive from `{}` returning error {:x}", vsvc_get_curpid_name(), pkt.get_cmd_id());
+        if error != 0 && error != 0x202 && error != 0xe02 && error != 0x402 && error != 0x408 && error != 0x1015 && error != 0xcc9d && error != 0x7d402 && error != 0x48c69 && error != 0x41a && error != 1 {
+            println_core!("svcReplyAndReceive from `{}` returning error {:x}", vsvc_get_curpid_name(), pkt.get_cmd_id());
+        }*/
+        
+        /*if get_core() == 3 {
+            pre_ctx = hsvc_sleep_thread(pre_ctx, 1000).await;
         }*/
         
         return pre_ctx;
@@ -489,7 +494,7 @@ impl SvcHandler for SvcSendSyncRequest
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        return pre_ctx;//ipc_handle_syncrequest(pre_ctx).await;
+        return ipc_handle_syncrequest(pre_ctx).await;
     }
 }
 
@@ -499,7 +504,7 @@ impl SvcHandler for SvcCloseHandle
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
         let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
-        hipc_close_handle(handle); // TODO error check?
+        //hipc_close_handle(handle); // TODO error check?
 
         return pre_ctx;
     }

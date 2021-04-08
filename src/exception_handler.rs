@@ -148,8 +148,14 @@ pub fn get_mrsmsr_iss_str(iss: u32) -> String
 
 pub fn print_context(ctx: &[u64], is_dabt: bool)
 {
-    let esr_el2 = (ctx[40] & 0xFFFFFFFF) as u32;
-    let elr_el2 = ctx[39];
+    let esr_el2 = (ctx[34] & 0xFFFFFFFF) as u32;
+    let elr_el2 = ctx[33];
+    let exception_el = (ctx[32] & 0xC) >> 2;
+    let except_sp = match (exception_el) {
+        0 => get_sp_el0(),
+        1 => get_sp_el1(),
+        _ => get_sp_el2(),
+    };
     println!("esr_el2: {:08x} {}", esr_el2, vsvc_get_curpid_name());
     println!("elr_el2: {:016x}", elr_el2);
     println!("elr_el1: {:016x}", get_elr_el1());
@@ -162,10 +168,13 @@ pub fn print_context(ctx: &[u64], is_dabt: bool)
     println!("x20 {:016x} x21 {:016x} x22 {:016x} x23 {:016x} ", ctx[20], ctx[21], ctx[22], ctx[23]);
     println!("x24 {:016x} x25 {:016x} x26 {:016x} x27 {:016x} ", ctx[24], ctx[25], ctx[26], ctx[27]);
     println!("x28 {:016x}", ctx[28]);
-    println!("sp  {:016x} lr  {:016x} pc  {:016x}", ctx[29], ctx[30], ctx[31]-(if is_dabt { 4 } else { 0 }));
+    println!("sp  {:016x} lr  {:016x} pc  {:016x}", except_sp, ctx[30], ctx[31]-(if is_dabt { 4 } else { 0 }));
     println!("");
-    println!("spsr_el2   {:016x} tpidr {:016x} {:016x}", ctx[32], ctx[33], ctx[34]);
-    println!("esr_el1    {:016x} afsr0 {:016x} afsr1 {:016x}", get_esr_el1(), get_afsr0_el1(), get_afsr1_el1());
+    println!("spsr_el2   {:016x} tpidr_el2 {:016x}", ctx[32], get_tpidr_el2());
+    println!("spsr_el1   {:016x} tpidr_el1 {:016x}", get_spsr_el1(), get_tpidr_el1());
+    println!("                           tpidr_el0 {:016x}", get_tpidr_el0());
+    println!("esr_el2    {:016x} afsr0_el2 {:016x} afsr1_el2 {:016x}", ctx[34], get_afsr0_el2(), get_afsr1_el2());
+    println!("esr_el1    {:016x} afsr0_el1 {:016x} afsr1_el1 {:016x}", get_esr_el1(), get_afsr0_el1(), get_afsr1_el1());
     
     unsafe
     {
@@ -193,7 +202,7 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
     let mut iss_string = String::new();
     let mut ec_string = "unknown exception code";
     
-    let elr_el2 = ctx[39];
+    let elr_el2 = ctx[33];
     let mut ret_addr = ret_addr_in;
 
     //iss_string[0] = 0;
@@ -426,12 +435,12 @@ pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
 
 pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 {
-    let esr_el2: u32 = (ctx[40] & 0xFFFFFFFF) as u32;
+    let esr_el2: u32 = (ctx[34] & 0xFFFFFFFF) as u32;
     let esr_el1: u32 = (get_esr_el1() & 0xFFFFFFFF);
     let mut ec: u8 = (esr_el2 >> 26) as u8;
     let mut iss: u32 = esr_el2 & 0x1FFFFFF;
 
-    let elr_el2 = ctx[39];
+    let elr_el2 = ctx[33];
     let mut ret_addr: u64 = elr_el2 + 4;
 
     let start_ticks: u64 = vsysreg_getticks();
@@ -451,7 +460,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         else if (hvc_num == 1)
         {
             // emulate ff 42 03 d5     msr        DAIFClr,#0x2
-            ctx[38] &= !0x80;
+            ctx[32] &= !0x80;
 
             //TODO
             ret_addr = elr_el2;
@@ -462,7 +471,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         else if (hvc_num == 2) // SVC post-hook
         {
             // emulate df 42 03 d5     msr        DAIFSet,#0x2
-            ctx[38] |= 0x80;
+            ctx[32] |= 0x80;
 
             //TODO
             ret_addr = elr_el2;
@@ -473,7 +482,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         else if (hvc_num == 3)
         {
             // emulate ff 42 03 d5     msr        DAIFClr,#0x2
-            ctx[38] &= !0x80;
+            ctx[32] &= !0x80;
 
             println!("(core {}) Unsupported SVC A32 hook!!", get_core());
             ret_addr = elr_el2;
@@ -481,7 +490,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         else if (hvc_num == 4)
         {
             // emulate df 42 03 d5     msr        DAIFSet,#0x2
-            ctx[38] |= 0x80;
+            ctx[32] |= 0x80;
 
             println!("(core {}) Unsupported SVC A32 hook!!", get_core());
             ret_addr = elr_el2;
@@ -496,7 +505,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             poke32(trans_bkpt, BKPT_OLD);
             
             enable_single_step();
-            ctx[38] |= (1<<21); // spsr_el2
+            ctx[32] |= (1<<21); // spsr_el2
             ret_addr = BKPT_ADDR;
             
             icache_invalidate(trans_bkpt, 0x10);
@@ -603,7 +612,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         unsafe
         {
         if ((RET_ADDR_LAST+4 != ret_addr && ret_addr != RET_ADDR_LAST_PRINT) || FORCE_PRINT) {
-            println!("{:016x} {:016x} {:08x} {:08x}", ret_addr, ctx[31], ctx[38] & bit!(21), esr_el2);
+            println!("{:016x} {:016x} {:08x} {:08x}", ret_addr, ctx[31], ctx[32] & bit!(21), esr_el2);
             RET_ADDR_LAST_PRINT = ret_addr;
             
             //print_exception(ec, iss, ctx, ret_addr);
@@ -621,8 +630,8 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         //disable_single_step();
         if (re_enable) {
         //enable_single_step();
-        ctx[38] |= (1<<21); // spsr_el2
-        //ctx[38] &= !(1<<21); // spsr_el2
+        ctx[32] |= (1<<21); // spsr_el2
+        //ctx[32] &= !(1<<21); // spsr_el2
         }
         
         unsafe
@@ -644,7 +653,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             BKPT_OLD = peek32(trans_bkpt);
             poke32(trans_bkpt, 0xd4000002 | (5 << 5));
             disable_single_step();
-            ctx[38] &= !(1<<21); // spsr_el2
+            ctx[32] &= !(1<<21); // spsr_el2
             
             icache_invalidate(trans_bkpt, 0x10);
             dcache_flush(trans_bkpt, 0x10);

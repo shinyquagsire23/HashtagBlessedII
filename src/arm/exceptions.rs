@@ -62,6 +62,18 @@ pub fn get_afsr1_el1() -> u32
 }
 
 #[inline(always)]
+pub fn get_afsr0_el2() -> u32
+{
+    sysreg_read!("afsr0_el2") as u32
+}
+
+#[inline(always)]
+pub fn get_afsr1_el2() -> u32
+{
+    sysreg_read!("afsr1_el2") as u32
+}
+
+#[inline(always)]
 pub fn get_spsr_el2() -> u64
 {
     sysreg_read!("spsr_el2")

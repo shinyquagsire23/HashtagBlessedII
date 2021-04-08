@@ -165,7 +165,6 @@ t210_reset:
 
 exception_print:
     // Store context
-    msr SPSel, #1
     sub sp, sp, #0x200
 
     stp x0, x1, [sp, #0x0]
@@ -183,82 +182,19 @@ exception_print:
     stp x24, x25, [sp, #0xC0]
     stp x26, x27, [sp, #0xD0]
     str x28, [sp, #0xE0]
-    str x30, [sp, #0xF0]
+    str x30, [sp, #0xF0] // 30
+    
+    add x21, sp, #0x200
+    str x21, [sp, #0xE8] // 29
+    
+    mrs	x21, elr_el2 // pc, 31
+    str x21, [sp, #0xF8] // pc, 31
     
     mrs	x21, spsr_el2
     mrs	x22, elr_el2
-    stp	x21, x22, [sp, #0x130] // 38,39
+    stp	x21, x22, [sp, #0x100] // 32,33
     mrs	x22, esr_el2
-    str x22, [sp, #0x140] // 40
-
-    mrs x0, spsr_el2
-    and x0, x0, 0xC
-    cmp x0, #(0x2 << 2)
-    beq hyp_preserve
-    cmp x0, #(0x1 << 2)
-    beq kern_preserve
-
-user_preserve:
-    mrs x21, sp_el0
-    str x21, [sp, #0xE8]
-    
-    mrs	x21, elr_el2 // pc
-    str x21, [sp, #0xF8] // pc
-    
-    mrs	x21, spsr_el1
-    mrs	x22, tpidr_el1
-    stp	x21, x22, [sp, #0x100]
-
-    mrs x21, esr_el1
-    mrs x22, afsr0_el1
-    stp x21, x22, [sp, #0x110]
-    
-    mrs x21, afsr1_el1
-    mov x22, #0x0
-    stp x21, x22, [sp, #0x120]
-    b _do_except
-
-kern_preserve:
-    mrs x21, sp_el1
-    str x21, [sp, #0xE8]
-    
-    mrs	x21, elr_el2 // pc
-    str x21, [sp, #0xF8] // pc
-    
-    mrs	x21, spsr_el1
-    mrs	x22, tpidr_el1
-    stp	x21, x22, [sp, #0x100]
-
-    mrs x21, esr_el1
-    mrs x22, afsr0_el1
-    stp x21, x22, [sp, #0x110]
-    
-    mrs x21, afsr1_el1
-    mov x22, #0x0
-    stp x21, x22, [sp, #0x120]
-    b _do_except
-
-hyp_preserve:
-    add x21, sp, #0x200
-    str x21, [sp, #0xE8]
-
-    mrs	x21, elr_el2 // pc
-    str x21, [sp, #0xF8] // pc
-
-    mrs	x21, spsr_el2
-    mrs	x22, tpidr_el2
-    stp	x21, x22, [sp, #0x100]
-
-    mrs x21, esr_el2
-    mrs x22, afsr0_el2
-    stp x21, x22, [sp, #0x110]
-    
-    mrs x21, afsr1_el2
-    mov x22, #0x0
-    stp x21, x22, [sp, #0x120]
-    b _do_except
-
-_do_except:
+    str x22, [sp, #0x110] // 34
 
     sub sp, sp, #0x10
     str lr, [sp]
@@ -276,12 +212,9 @@ _do_except:
     //msr daifclr, #0b0010
     //isb
     
-    nop
-    nop
-    
     msr elr_el2, x0
     
-    ldp	x21, x22, [sp, #0x130] // 38,39
+    ldp	x21, x22, [sp, #0x100] // 32,33
     msr	spsr_el2, x21
     //msr	elr_el2, x22
     
@@ -308,7 +241,6 @@ _do_except:
 
 irq_print:
     // Store context
-    msr SPSel, #1
     sub sp, sp, #0x200
 
     stp x0, x1, [sp, #0x0]
@@ -326,82 +258,20 @@ irq_print:
     stp x24, x25, [sp, #0xC0]
     stp x26, x27, [sp, #0xD0]
     str x28, [sp, #0xE0]
-    str x30, [sp, #0xF0]
+    str x30, [sp, #0xF0] // 30
+    
+    add x21, sp, #0x200
+    str x21, [sp, #0xE8] // 29
+    
+    mrs	x21, elr_el2 // pc, 31
+    str x21, [sp, #0xF8] // pc, 31
     
     mrs	x21, spsr_el2
     mrs	x22, elr_el2
-    stp	x21, x22, [sp, #0x130] // 38,39
+    stp	x21, x22, [sp, #0x100] // 32,33
     mrs	x22, esr_el2
-    str x22, [sp, #0x140] // 40
+    str x22, [sp, #0x110] // 34
 
-    mrs x0, spsr_el2
-    and x0, x0, 0xC
-    cmp x0, #(0x2 << 2)
-    beq irq_hyp_preserve
-    cmp x0, #(0x1 << 2)
-    beq irq_kern_preserve
-
-irq_user_preserve:
-    mrs x21, sp_el0
-    str x21, [sp, #0xE8]
-    
-    mrs	x21, elr_el2 // pc
-    str x21, [sp, #0xF8] // pc
-    
-    mrs	x21, spsr_el1
-    mrs	x22, tpidr_el1
-    stp	x21, x22, [sp, #0x100]
-
-    mrs x21, esr_el1
-    mrs x22, afsr0_el1
-    stp x21, x22, [sp, #0x110]
-    
-    mrs x21, afsr1_el1
-    mov x22, #0x0
-    stp x21, x22, [sp, #0x120]
-    b irq__do_except
-
-irq_kern_preserve:
-    mrs x21, sp_el1
-    str x21, [sp, #0xE8]
-    
-    mrs	x21, elr_el2 // pc
-    str x21, [sp, #0xF8] // pc
-    
-    mrs	x21, spsr_el1
-    mrs	x22, tpidr_el1
-    stp	x21, x22, [sp, #0x100]
-
-    mrs x21, esr_el1
-    mrs x22, afsr0_el1
-    stp x21, x22, [sp, #0x110]
-    
-    mrs x21, afsr1_el1
-    mov x22, #0x0
-    stp x21, x22, [sp, #0x120]
-    b irq__do_except
-
-irq_hyp_preserve:
-    add x21, sp, #0x200
-    str x21, [sp, #0xE8]
-
-    mrs	x21, elr_el2 // pc
-    str x21, [sp, #0xF8] // pc
-
-    mrs	x21, spsr_el2
-    mrs	x22, tpidr_el2
-    stp	x21, x22, [sp, #0x100]
-
-    mrs x21, esr_el2
-    mrs x22, afsr0_el2
-    stp x21, x22, [sp, #0x110]
-    
-    mrs x21, afsr1_el2
-    mov x22, #0x0
-    stp x21, x22, [sp, #0x120]
-    b irq__do_except
-
-irq__do_except:
     sub sp, sp, #0x10
     str lr, [sp]
     
@@ -417,13 +287,10 @@ irq__do_except:
     
     //msr daifclr, #0b0010
     //isb
-    
-    nop
-    nop
 
     msr elr_el2, x0
     
-    ldp	x21, x22, [sp, #0x130] // 38,39
+    ldp	x21, x22, [sp, #0x100] // 32,33
     msr	spsr_el2, x21
     //msr	elr_el2, x22
 

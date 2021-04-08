@@ -18,12 +18,14 @@ use crate::vm::vsvc::vsvc_get_curpid_name;
 use crate::hos::hdomainobj::HDomainObj;
 use crate::hos::hdomainsession::HDomainSession;
 use crate::modules::fsp::fsp_init;
+use crate::modules::pcv::pcv_init;
 
 static mut IPC_MODULE_HANDLERS: BTreeMap<String, HClientSessionHandler> = BTreeMap::new();
 
 pub fn ipc_init()
 {
     fsp_init();
+    pcv_init();
 }
 
 pub fn ipc_register_handler(service_name: String, handler: HClientSessionHandler)
@@ -34,11 +36,11 @@ pub fn ipc_register_handler(service_name: String, handler: HClientSessionHandler
     }
 }
 
-pub fn ipc_get_handler(service_name: String) -> Option<HClientSessionHandler>
+pub fn ipc_get_handler(service_name: &String) -> Option<HClientSessionHandler>
 {
     unsafe
     {
-        if let Some(handler) = IPC_MODULE_HANDLERS.get(&service_name) {
+        if let Some(handler) = IPC_MODULE_HANDLERS.get(service_name) {
             return Some(*handler);
         }
         return None;
@@ -67,14 +69,12 @@ async fn handle_sm(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
             let post_ctx = SvcWait::new(pre_ctx).await;
             let resp = hipc_get_packet();
             
-            if let Some(handler) = ipc_get_handler(name) {
-                /*
-                if resp.hook_first_handle(handle, handler) {
-                    //println_core!("sm::GetServiceHandle(`{}`) -> {:x}", name, handle);
-                }
-                */
+            /*if name == "clkrst" {
+                println_core!("sm::GetServiceHandle(`{}`) for `{}`", name, vsvc_get_curpid_name());
+            }*/
+            if let Some(handler) = ipc_get_handler(&name) {
                 if let Some(handle) = resp.get_handle(0) {
-                    //println_core!("sm::GetServiceHandle(`{}`) -> {:x}", name, handle);
+                    //println_core!("sm::GetServiceHandle(`{}`) -> {:x} for `{}`", name, handle, vsvc_get_curpid_name());
                     
                     // TODO: Copied handles may not actually belong to parent
                     let mut service_hsession = sm_hsession.lock().new_from_parent();
@@ -230,6 +230,10 @@ pub async fn ipc_handle_syncrequest_control(mut pre_ctx: [u64; 32]) -> [u64; 32]
 pub async fn ipc_handle_syncrequest(mut pre_ctx: [u64; 32]) -> [u64; 32]
 {
     let handle = (pre_ctx[0] & 0xFFFFFFFF) as u32;
+    
+    /*if !hipc_get_handle_clientsession(handle).is_some() {
+        return pre_ctx;
+    }*/
         
     let pkt = hipc_get_packet();
     match pkt.get_type()

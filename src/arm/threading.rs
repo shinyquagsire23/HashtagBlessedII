@@ -20,8 +20,33 @@ pub fn get_vmpidr() -> u64 {
 }
 
 #[inline(always)]
+pub fn get_tpidr_el0() -> u64 {
+    sysreg_read!("tpidr_el0")
+}
+
+#[inline(always)]
+pub fn get_tpidr_el1() -> u64 {
+    sysreg_read!("tpidr_el1")
+}
+
+#[inline(always)]
+pub fn get_tpidr_el2() -> u64 {
+    sysreg_read!("tpidr_el2")
+}
+
+#[inline(always)]
 pub fn get_sp_el0() -> u64 {
     sysreg_read!("sp_el0")
+}
+
+#[inline(always)]
+pub fn get_sp_el1() -> u64 {
+    sysreg_read!("sp_el1")
+}
+
+#[inline(always)]
+pub fn get_sp_el2() -> u64 {
+    sysreg_read!("sp_el2")
 }
 
 #[inline(always)]
