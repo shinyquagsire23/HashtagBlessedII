@@ -323,7 +323,11 @@ impl SvcHandler for SvcBreak
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        println_core!("process `{}` (pid {}) called svcBreak!", vsvc_get_curpid_name(), vsvc_get_curpid());
+        let mut val = 0;
+        if pre_ctx[1] != 0 {
+            val = peek32(translate_el1_stage12(pre_ctx[1]));
+        }
+        println_core!("process `{}` (pid {}) called svcBreak(0x{:x}, 0x{:x}, 0x{:x} -> 0x{:x})!", vsvc_get_curpid_name(), vsvc_get_curpid(), pre_ctx[0], pre_ctx[1], pre_ctx[2], val);
 
         return pre_ctx;
     }
@@ -534,7 +538,7 @@ impl SvcHandler for SvcGetSystemInfo
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        /*let info_type = pre_ctx[1];
+        let info_type = pre_ctx[1];
         let info_subtype = pre_ctx[3];
         
         //
@@ -550,8 +554,8 @@ impl SvcHandler for SvcGetSystemInfo
             post_ctx[1] -= 0x4000000;
         }
 
-        return post_ctx;*/
-        return pre_ctx;
+        return post_ctx;
+        //return pre_ctx;
     }
 }
 

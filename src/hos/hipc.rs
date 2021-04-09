@@ -640,9 +640,9 @@ impl HIPCHandleDesc
 #[derive(Copy, Clone)]
 pub struct HIPCStaticDesc
 {
-    index: u16,
-    addr: u64,
-    size: u16,
+    pub index: u16,
+    pub addr: u64,
+    pub size: u16,
 }
 
 impl HIPCStaticDesc
@@ -679,13 +679,18 @@ impl HIPCStaticDesc
     {
         String::from(kstr_len!(self.addr, self.size))
     }
+    
+    pub fn get_addr_el2(&self) -> u64
+    {
+        return translate_el1_stage12(self.addr);
+    }
 }
 
 pub struct HIPCSendRecvExchDesc
 {
-    addr: u64,
-    size: u64,
-    flags: u8
+    pub addr: u64,
+    pub size: u64,
+    pub flags: u8
 }
 
 impl HIPCSendRecvExchDesc
@@ -719,9 +724,42 @@ impl HIPCSendRecvExchDesc
         12
     }
     
-    pub fn read_str(&self) -> String
+    pub fn read_u32(&self, offs: usize) -> u32
     {
-        String::from(kstr_len!(self.addr, self.size))
+        peek32(translate_el1_stage12(self.addr + (offs as u64)))
+    }
+    
+    pub fn read_u64(&self, offs: usize) -> u64
+    {
+        peek64(translate_el1_stage12(self.addr + (offs as u64)))
+    }
+    
+    pub fn read_str(&self, offs: usize) -> String
+    {
+        String::from(kstr_len!(self.addr + (offs as u64), self.size - (offs as u64)))
+    }
+    
+    pub fn is_ascii(&self) -> bool
+    {
+        let hyp_addr = translate_el1_stage12(self.addr);
+        for i in 0..(self.size as u64)
+        {
+            let val = peek8(hyp_addr + i);
+            
+            if val == 0 {
+                break;
+            }
+            
+            if (val >= 1 && val <= 0x20) || (val >= 0x7f) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    pub fn get_addr_el2(&self) -> u64
+    {
+        return translate_el1_stage12(self.addr);
     }
 }
 
@@ -994,6 +1032,30 @@ impl HIPCPacket
     {
         if idx < self.num_static as usize {
             return Some(HIPCStaticDesc::unpack(self.static_desc_start + (idx*8) as u64));
+        }
+        return None;
+    }
+    
+    pub fn get_send(&self, idx: usize) -> Option<HIPCSendRecvExchDesc>
+    {
+        if idx < self.num_send as usize {
+            return Some(HIPCSendRecvExchDesc::unpack(self.send_desc_start + (idx*12) as u64));
+        }
+        return None;
+    }
+    
+    pub fn get_recv(&self, idx: usize) -> Option<HIPCSendRecvExchDesc>
+    {
+        if idx < self.num_recv as usize {
+            return Some(HIPCSendRecvExchDesc::unpack(self.recv_desc_start + (idx*12) as u64));
+        }
+        return None;
+    }
+    
+    pub fn get_exch(&self, idx: usize) -> Option<HIPCSendRecvExchDesc>
+    {
+        if idx < self.num_exch as usize {
+            return Some(HIPCSendRecvExchDesc::unpack(self.exch_desc_start + (idx*12) as u64));
         }
         return None;
     }

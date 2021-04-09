@@ -275,12 +275,14 @@ pub extern "C" fn main_cold()
     }
     
     poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x280, 0xd4000002); // EL1 IRQ
+    poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x280 - 4, 0xd69f03e0); // EL1 IRQ ERET
     poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x480, 0xd4000002); // EL0 IRQ
+    poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x480 - 4, 0xd69f03e0); // EL0 IRQ ERET
     
     //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x584, 0xd4000002); // lowerel serror
     //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x784, 0xd4000002); // lowerel serror
     
-    poke32(ipaddr_to_paddr(KERNEL_START) + 0x4bcc0, 0xd4000002); // el0 dabt/iabt
+    poke32(ipaddr_to_paddr(KERNEL_START) + 0x4bcc0, 0xd4000002 | (6 << 5)); // el0 dabt/iabt
 
     // Finalize things
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);

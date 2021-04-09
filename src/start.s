@@ -165,7 +165,7 @@ t210_reset:
 
 exception_print:
     // Store context
-    sub sp, sp, #0x200
+    sub sp, sp, #0x120
 
     stp x0, x1, [sp, #0x0]
     stp x2, x3, [sp, #0x10]
@@ -184,7 +184,7 @@ exception_print:
     str x28, [sp, #0xE0]
     str x30, [sp, #0xF0] // 30
     
-    add x21, sp, #0x200
+    add x21, sp, #0x120
     str x21, [sp, #0xE8] // 29
     
     mrs	x21, elr_el2 // pc, 31
@@ -234,14 +234,14 @@ exception_print:
     ldp x26, x27, [sp, #0xD0]
     ldr x28, [sp, #0xE0]
     ldr x30, [sp, #0xF0]
-    add sp, sp, #0x200
+    add sp, sp, #0x120
     eret
 
 .pool
 
 irq_print:
     // Store context
-    sub sp, sp, #0x200
+    sub sp, sp, #0x120
 
     stp x0, x1, [sp, #0x0]
     stp x2, x3, [sp, #0x10]
@@ -260,7 +260,7 @@ irq_print:
     str x28, [sp, #0xE0]
     str x30, [sp, #0xF0] // 30
     
-    add x21, sp, #0x200
+    add x21, sp, #0x120
     str x21, [sp, #0xE8] // 29
     
     mrs	x21, elr_el2 // pc, 31
@@ -310,7 +310,7 @@ irq_print:
     ldp x26, x27, [sp, #0xD0]
     ldr x28, [sp, #0xE0]
     ldr x30, [sp, #0xF0]
-    add sp, sp, #0x200
+    add sp, sp, #0x120
     eret
 
 .pool

@@ -7,3 +7,7 @@
 pub mod ipc;
 pub mod fsp;
 pub mod pcv;
+pub mod log;
+pub mod set;
+pub mod fatal;
+pub mod erpt;

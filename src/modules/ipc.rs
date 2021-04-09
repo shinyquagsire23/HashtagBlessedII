@@ -19,6 +19,10 @@ use crate::hos::hdomainobj::HDomainObj;
 use crate::hos::hdomainsession::HDomainSession;
 use crate::modules::fsp::fsp_init;
 use crate::modules::pcv::pcv_init;
+use crate::modules::log::log_init;
+use crate::modules::set::set_init;
+use crate::modules::fatal::fatal_init;
+use crate::modules::erpt::erpt_init;
 
 static mut IPC_MODULE_HANDLERS: BTreeMap<String, HClientSessionHandler> = BTreeMap::new();
 
@@ -26,6 +30,10 @@ pub fn ipc_init()
 {
     fsp_init();
     pcv_init();
+    log_init();
+    set_init();
+    fatal_init();
+    erpt_init();
 }
 
 pub fn ipc_register_handler(service_name: String, handler: HClientSessionHandler)

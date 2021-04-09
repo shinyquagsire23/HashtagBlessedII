@@ -442,9 +442,6 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
     let elr_el2 = ctx[33];
     let mut ret_addr: u64 = elr_el2 + 4;
-
-    let start_ticks: u64 = vsysreg_getticks();
-    let mut end_ticks: u64 = start_ticks;
     
     if (ec == EC_HVC_A64) // HVC
     {
@@ -464,9 +461,9 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
             //TODO
             ret_addr = elr_el2;
-            if (get_core() == 3) {
+            //if (get_core() == 3) {
                 ret_addr = vsvc_pre_handle(iss, ctx);
-            }
+            //}
         }
         else if (hvc_num == 2) // SVC post-hook
         {
@@ -475,9 +472,9 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
             //TODO
             ret_addr = elr_el2;
-            if (get_core() == 3) {
+            //if (get_core() == 3) {
                 ret_addr = vsvc_post_handle(iss, ctx);
-            }
+            //}
         }
         else if (hvc_num == 3)
         {
@@ -546,8 +543,14 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             }
             else
             {
+                let old_pc = ctx[31];
+                let old_sp = ctx[29];
+                ctx[31] = get_elr_el1();
+                ctx[29] = get_sp_el0();
                 ret_addr = elr_el2;
                 ret_addr = print_exception(ec, iss, ctx, ret_addr);
+                ctx[31] = old_pc;
+                ctx[29] = old_sp;
             }
         }
         else if (ec == EC_SVC_A32 || ec == EC_SVC_A64)
@@ -568,7 +571,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         }
         
         
-        if (hvc_num == 0 && ec != 0x15)
+        if (hvc_num == 6 && ec != 0x15)
         {
             println!("(core {}) ec {:x} {:016x}", get_core(), ec, elr_el2);
             ctx[17] = ctx[16] & 0x3F;
@@ -596,9 +599,6 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
     }
     else if (ec == EC_SMC64)
     {
-        if (ctx[0] == 0x00000000c3000002) {
-        //print_exception(ec, iss, ctx, ret_addr);
-        }
         ret_addr = vsmc_handle(iss, ctx);
     }
     else if (ec == EC_DABT_LOWER_EL && ((iss & bit!(24)) != 0))
@@ -709,8 +709,5 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
         loop{}
     }
 
-    end_ticks = vsysreg_getticks();
-    vsysreg_addoffset(end_ticks - start_ticks);
-    //mutex_unlock(&exception_print_mutex);
     return ret_addr;
 }

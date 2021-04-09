@@ -150,6 +150,10 @@ pub fn vmmio_handle_lowerel_dabt(iss: u32, ctx: &mut [u64]) -> u64
     {
         v_regrw.debug_print = false;
     }
+    else if (io_addr >= 0x80000000)
+    {
+        v_regrw.debug_print = true;
+    }
 
     if (is_xzr)
     {

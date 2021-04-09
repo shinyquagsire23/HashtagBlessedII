@@ -62,6 +62,7 @@ pub const GICH_INT_EOI: u32 = (bit!(0)); // end of interrupt IRQ
 static mut IRQ_HEARTBEAT_DOWNSCALE: [u32; 8] = [0; 8];
 static mut LAST_TASKING: u64 = 0;
 static mut LAST_TASKING_MAX: u64 = 0;
+static mut IRQ_ENABLE_ONCE: bool = true;
 
 pub fn get_tasking_time() -> u64
 {
@@ -120,11 +121,12 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
     let vcpu = ((hppir >> 10) & 0x7) as u8;
     let int_id = (hppir & 0x3FF) as u16;
     
-    if (get_core() == 2 && int_id < 16)
+    if (get_core() == 2 && int_id < 16 && unsafe { IRQ_ENABLE_ONCE })
     {
         gic.enable_interrupt(IRQ_T210_USB, get_core());
         tegra_irq_en(20);
         gic.enable_interrupt(IRQ_EL2_TIMER, get_core());
+        unsafe { IRQ_ENABLE_ONCE = false; }
     }
 
     let mut show_irqs = false;
@@ -132,6 +134,10 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
     if (int_id == IRQ_EL2_TIMER) // timer
     {
         sysreg_write!("cnthp_ctl_el2", 3);
+        
+        let iar = gic.get_iar();
+        gic.set_eoir(iar);
+        gic.set_dir(iar);
         
         let start = get_ticks();
         //TODO better place this?
@@ -165,17 +171,19 @@ pub fn virq_handle_fake(ctx: &mut [u64]) -> u64
             }
         }
 
-        return elr_el2;
+        return elr_el2-8;
     }
     else if (int_id == IRQ_T210_USB)
     {
+        let iar = gic.get_iar();
+        gic.set_eoir(iar);
+        gic.set_dir(iar);
+        
         if (get_core() == 2) {
-            task_advance();
             irq_usb();
-            task_advance();
         }
         
-        return elr_el2;
+        return elr_el2-8;
     }
     
     return elr_el2;
