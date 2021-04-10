@@ -2218,6 +2218,24 @@ pub fn usbd_recover() -> UsbdError
     return ret;
 }
 
+pub fn usbd_suspend()
+{
+    let mut clk_out_enb_l: MMIOReg = MMIOReg::new(CLK_RST_CONTROLLER_CLK_OUT_ENB_L);
+    let mut rst_dev_l_set: MMIOReg = MMIOReg::new(CLK_RST_CONTROLLER_RST_DEV_L_SET);
+    let mut rst_dev_l_clr: MMIOReg = MMIOReg::new(CLK_RST_CONTROLLER_RST_DEV_L_CLR);
+    let mut clk_out_enb_w: MMIOReg = MMIOReg::new(CLK_RST_CONTROLLER_CLK_OUT_ENB_W);
+    let mut apbdev_pmc_usb_ao: MMIOReg = MMIOReg::new(APBDEV_PMC_USB_AO);
+    
+    rst_dev_l_set |= CLK_ENB_USBD;
+    timer_wait(2);
+    clk_out_enb_l &= !CLK_ENB_USBD;
+    timer_wait(2);
+    clk_out_enb_l |= bit!(8);
+    clk_out_enb_w |= bit!(21);
+    
+    apbdev_pmc_usb_ao |= 0xC;
+}
+
 pub fn usbd_is_enumerated() -> bool
 {
     let usbd = get_usbd();

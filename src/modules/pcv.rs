@@ -47,9 +47,8 @@ async fn handle_clksession(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
         if dev == 0x40000001 {
             hz = 1785 * 1000000;
             println_core!("clkrst: Overclocking to 1.785GHz!");
+            pkt.write_u32(0, hz);
         }
-        
-        pkt.write_u32(0, hz);
 
         return pre_ctx;
     }

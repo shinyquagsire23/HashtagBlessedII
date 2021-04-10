@@ -15,7 +15,7 @@ use crate::arm::mmu::*;
 use crate::exception_handler::*;
 use crate::io::smmu::*;
 use crate::task::*;
-use crate::usbd::usbd::irq_usb;
+use crate::usbd::usbd::{usbd_suspend, irq_usb};
 use crate::io::uart::*;
 
 extern "C"
@@ -139,6 +139,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
         }
         
         smmu_sleep();
+        usbd_suspend();
         
         //let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
         //uart_a.shutdown();

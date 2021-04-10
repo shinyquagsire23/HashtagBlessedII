@@ -640,6 +640,7 @@ impl HIPCHandleDesc
 #[derive(Copy, Clone)]
 pub struct HIPCStaticDesc
 {
+    buf: u64,
     pub index: u16,
     pub addr: u64,
     pub size: u16,
@@ -664,10 +665,25 @@ impl HIPCStaticDesc
         
         HIPCStaticDesc
         {
+            buf: buf,
             index: index,
             addr: addr,
             size: size
         }
+    }
+    
+    pub fn pack(&self)
+    {
+        let index5to0 = (self.index & 0x3F) as u32;
+        let addr38to36 = ((self.addr >> 36) & 0x7) as u32;
+        let index11to9 = ((self.index >> 9) & 0x7) as u32;
+        let addr35to32 = ((self.addr >> 32) & 0xF) as u32;
+        let addr31to0 = (self.addr & 0xFFFFFFFF) as u32;
+
+        let word0 = ((self.size as u32) << 16) | (addr38to36 << 6) | (index11to9 << 9) | (addr35to32 << 12) | (index5to0);
+        
+        poke32(self.buf, word0);
+        poke32(self.buf, addr31to0);
     }
     
     pub const fn packed_size(&self) -> u64
@@ -678,6 +694,29 @@ impl HIPCStaticDesc
     pub fn read_str(&self) -> String
     {
         String::from(kstr_len!(self.addr, self.size))
+    }
+    
+    pub fn read_str_at(&self, offs: u64) -> String
+    {
+        if (offs as u16) > self.size {
+            return String::from("");
+        }
+        return String::from(kstr_len!(self.addr + offs, self.size - offs as u16));
+    }
+    
+    pub fn put_str_at(&mut self, offs: u64, strval: String)
+    {
+        if (offs as u16) > self.size {
+            return;
+        }
+        let bytes = strval.into_bytes();
+        let addr_el2 = translate_el1_stage12(self.addr);
+        for i in 0..bytes.len()
+        {
+            poke8(addr_el2 + offs + (i as u64), bytes[i]);
+        }
+        poke8(addr_el2 + offs + bytes.len() as u64, 0);
+        //self.size = 1 + bytes.len() as u16;
     }
     
     pub fn get_addr_el2(&self) -> u64

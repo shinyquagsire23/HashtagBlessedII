@@ -35,6 +35,28 @@ async fn handle_setsys(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
     
     match pkt.get_cmd_id()
     {
+        3 | 4 => // GetSystemVersion
+        {
+            let curpid_name = vsvc_get_curpid_name();
+            if curpid_name != "qlaunch" && curpid_name != "maintenance" {
+                return pre_ctx;
+            }
+            
+            // Wait for SVC to complete
+            let post_ctx = SvcWait::new(pre_ctx).await;
+            let resp = hipc_get_packet();
+            
+            if let Some(mut desc) = resp.get_static(0)
+            {
+                let version = String::from(&desc.read_str_at(0x68));
+                let new_version = String::from("HTB ") + &version;
+
+                desc.put_str_at(0x68, new_version);
+                desc.pack();
+            }
+            
+            return post_ctx;
+        },
         38 => // GetSettingsItemValue
         {
             let mut setting_id = String::from("");

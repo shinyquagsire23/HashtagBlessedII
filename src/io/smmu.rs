@@ -99,7 +99,7 @@ pub fn smmu_init()
     
     unsafe
     {
-        OLD_AHB_ARB = ahb_arb_disable.r32();
+        OLD_AHB_ARB = ahb_arb_disable.r32() | (bit!(1) | bit!(4) | bit!(6) | bit!(7) | bit!(18));
     }
     
     /*unsafe
@@ -130,7 +130,7 @@ pub fn smmu_init()
 pub fn smmu_sleep()
 {
     let ahb_arb_disable: MMIOReg = MMIOReg::new(AHB_ARBITRATION_DISABLE);
-    unsafe { ahb_arb_disable.w32(OLD_AHB_ARB);}
+    unsafe { ahb_arb_disable.w32(0x40062);}
 }
 
 pub fn smmu_active() -> bool

@@ -17,6 +17,7 @@ pub const CLK_RST_CONTROLLER_OSC_CTRL:                 u32 = (CAR_PADDR + 0x050)
 pub const CLK_RST_CONTROLLER_CLK_OUT_ENB_Y:            u32 = (CAR_PADDR + 0x298);
 pub const CLK_RST_CONTROLLER_RST_DEV_L_SET:            u32 = (CAR_PADDR + 0x300);
 pub const CLK_RST_CONTROLLER_RST_DEV_L_CLR:            u32 = (CAR_PADDR + 0x304);
+pub const CLK_RST_CONTROLLER_CLK_OUT_ENB_W:            u32 = (CAR_PADDR + 0x364);
 pub const CLK_RST_CONTROLLER_RST_DEV_W_SET:            u32 = (CAR_PADDR + 0x438);
 pub const CLK_RST_CONTROLLER_RST_DEV_W_CLR:            u32 = (CAR_PADDR + 0x43C);
 pub const CLK_RST_CONTROLLER_UTMIP_PLL_CFG0:           u32 = (CAR_PADDR + 0x480);

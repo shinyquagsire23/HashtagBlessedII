@@ -95,8 +95,6 @@ pub extern "C" fn main_warm(arg: u64)
     {
         let mut uart_a: UARTDevice = UARTDevice::new(UartA);
         uart_a.init(115200);
-        
-        println_uarta!("started warm?");
     
         fpu_enable();
         smmu_init();
@@ -116,7 +114,6 @@ pub extern "C" fn main_warm(arg: u64)
         tegra_irq_en(IRQNUM_T210_USB as i32);
         
         task_run(blink_task());
-        timer_wait(2000000);
     }
     
     
@@ -135,7 +132,7 @@ pub extern "C" fn main_warm(arg: u64)
     irq_timer_init(&mut gic);
 
     // Trap core's timer registers
-    timer_trap_el1_access();
+    //timer_trap_el1_access();
     
     let warm_entrypoint = vsmc_get_warm_entrypoint();
 
@@ -176,11 +173,9 @@ pub extern "C" fn main_cold()
 {
     unsafe { ALLOCATOR.init((HEAP_RES.0.as_ptr() as *const u8) as usize, 0x400000); }
     
-    //let mut uart_a: UARTDevice = UARTDevice::new(UartA);
-    //uart_a.init(115200);
-    
-    //println_uarta!("main?");
-    
+    let mut uart_a: UARTDevice = UARTDevice::new(UartA);
+    uart_a.init(115200);
+
     //fast_boot();
     
     // Initialize tasking for logger
@@ -283,14 +278,14 @@ pub extern "C" fn main_cold()
             }
             else if (peek32(search + 4) == 0xd63f0260) // A32
             {
-                poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
-                poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
+                //poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
+                //poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
                 a32_hooked = true;
             }
         }
         else if (peek32(search) == 0x92401611)
         {
-            //poke32(search + 0, 0xd4000002 | (6 << 5)); // el0 dabt/iabt
+            poke32(search + 0, 0xd4000002 | (6 << 5)); // el0 dabt/iabt
             dabt_hooked = true;
         }
 
