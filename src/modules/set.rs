@@ -58,7 +58,7 @@ async fn handle_setsys(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
             if let Some(desc) = recv_desc
             {
                 let result_str = if desc.is_ascii() { desc.read_str(0) } else { format!("{:016x}", peek64(desc.get_addr_el2())) };
-                println_core!("setsys::GetSettingsItemValue(`{}`) -> `{}` from `{}`", setting_id, result_str, vsvc_get_curpid_name());
+                //println_core!("setsys::GetSettingsItemValue(`{}`) -> `{}` from `{}`", setting_id, result_str, vsvc_get_curpid_name());
                 
                 if setting_id == "am.debug!force_disable_continuous_recording" {
                     poke8(desc.get_addr_el2(), 1);

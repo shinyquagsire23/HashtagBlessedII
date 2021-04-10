@@ -127,15 +127,15 @@ pub fn logger_unsafe_override()
 
 pub fn log_uarta(data: &str)
 {
-    let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
-    uart_a.write_str(data);
+    //let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
+    //uart_a.write_str(data);
     //uart_a.wait_for_write();
 }
 
 pub fn log_uarta_raw(data: &[u8])
 {
-    let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
-    uart_a.write_bytes(data);
+    //let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
+    //uart_a.write_bytes(data);
     //uart_a.wait_for_write();
 }
 
@@ -396,7 +396,7 @@ pub fn log_cmd(data: &[u8])
 
 pub fn log_unsafe(data: &str)
 {
-    log_uarta_raw(data.as_bytes());
+    //log_uarta_raw(data.as_bytes());
     log_usb_raw(data.as_bytes());
 }
 

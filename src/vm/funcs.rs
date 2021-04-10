@@ -15,6 +15,7 @@ extern "C" {
     pub fn disable_smcstuff();
     pub fn _enable_single_step();
     pub fn _disable_single_step();
+    pub fn no_hyp_stuff();
 }
 
 pub fn enable_single_step()

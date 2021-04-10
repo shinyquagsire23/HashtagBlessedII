@@ -16,6 +16,7 @@ use crate::exception_handler::*;
 use crate::io::smmu::*;
 use crate::task::*;
 use crate::usbd::usbd::irq_usb;
+use crate::io::uart::*;
 
 extern "C"
 {
@@ -119,7 +120,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     }
     else if (smc_cmd == SMC0_GENAESKEK || smc_cmd == SMC0_COMPUTEAES || smc_cmd == SMC0_COMPUTECMAC || smc_cmd == SMC0_GETCONFIG/* || smc_cmd == SMC_GENRANDOMBYTES || smc_cmd == SMC_GETCONFIG*/)
     {
-        silence_print = true;
+        silence_print = false;
     }
     else if (smc_cmd == SMC_CPUOFF)
     {
@@ -128,14 +129,20 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     else if (smc_cmd == SMC_CPUSUSPEND)
     {
         println_core!("SmcCpuSuspend called!");
-        crate::io::timer::timer_wait(1000000);
         println_core!("SMC #{} Smc{} (X0 = {:016x}, X1 = {:016x}, X2 = {:016x}, X3 = {:016x})", smc_which, get_smc_name(smc_cmd), ctx[0], ctx[1], ctx[2], ctx[3]);
         
         vsmc_set_warm_entrypoint(ctx[2], ctx[3]);
+        //unsafe { drop_to_el1(ctx[2], ctx[3]); }
         unsafe
         {
             ctx[2] = (to_u64ptr!(&__text_start)) + 4;
         }
+        
+        smmu_sleep();
+        
+        //let mut uart_a: UARTDevice = UARTDevice::new(UARTDevicePort::UartA);
+        //uart_a.shutdown();
+        
         
         /*if get_core() == 0 {
             loop 
@@ -233,6 +240,20 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
         unsafe { smc0_shim(ctx.as_mut_ptr()); }
     }
     
+    if (smc_cmd == SMC_CPUSUSPEND)
+    {
+        println_core!("We shouldn't be here? {:x}", ctx[0]);
+        if get_core() == 0 {
+            loop 
+            {
+                irq_usb();
+                task_advance();
+            }
+        } else {
+            loop{}
+        }
+    }
+    
     if (!silence_print)
     {
         //println!("(core {}) ret SMC #{} Smc{} (X0 = {:016x}, X1 = {:016x}, X2 = {:016x}, X3 = {:016x})", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0], ctx[1], ctx[2], ctx[3]);
@@ -244,10 +265,10 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
         //println!("(core {}) SMC #{} Smc{} returned {:08x}", get_core(), smc_which, get_smc_name(smc_cmd), ctx[0]);
     }
     
-    if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_PROGRAMVERIFY)
+    /*if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_PROGRAMVERIFY)
     {
         ctx[0] = 0;
-        ctx[1] |= 0;//1;
+        ctx[1] |= 1;//1;
     }
     else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_KERNELCONFIG)
     {
@@ -257,7 +278,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_ISDEBUGMODE)
     {
         ctx[0] = 0;
-        ctx[1] = 1;//1;
+        ctx[1] = 0;//1;
     }
     else if (smc_cmd == SMC_GETCONFIG && smc_arg0 == CONFIGITEM_ISRECOVERYBOOT)
     {
@@ -279,7 +300,7 @@ pub fn vsmc_handle(iss: u32, ctx: &mut [u64]) -> u64
     {
         ctx[0] = 0;
         ctx[1] = 2;
-    }
+    }*/
 
     return retaddr;
 }

@@ -95,6 +95,8 @@ pub extern "C" fn main_warm(arg: u64)
     {
         let mut uart_a: UARTDevice = UARTDevice::new(UartA);
         uart_a.init(115200);
+        
+        println_uarta!("started warm?");
     
         fpu_enable();
         smmu_init();
@@ -154,15 +156,32 @@ pub fn irq_timer_init(gic: &mut GIC)
     }
 }
 
+pub fn fast_boot()
+{
+    memcpy32(ipaddr_to_paddr(KERNEL_START), to_u64ptr!(&KERN_DATA[0]), KERN_DATA.len());
+    dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
+    icache_invalidate(ipaddr_to_paddr(KERNEL_START), 0x10000000);
+    
+    unsafe { no_hyp_stuff(); }
+    
+    unsafe
+    {
+        drop_to_el1(KERNEL_START, 0);
+        loop {}
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn main_cold() 
 {
-    fpu_enable();
-    
     unsafe { ALLOCATOR.init((HEAP_RES.0.as_ptr() as *const u8) as usize, 0x400000); }
     
-    let mut uart_a: UARTDevice = UARTDevice::new(UartA);
-    uart_a.init(115200);
+    //let mut uart_a: UARTDevice = UARTDevice::new(UartA);
+    //uart_a.init(115200);
+    
+    //println_uarta!("main?");
+    
+    //fast_boot();
     
     // Initialize tasking for logger
     task_init();
@@ -245,6 +264,7 @@ pub extern "C" fn main_cold()
     let search_end = search_start + KERN_DATA.len() as u64;
     let mut a64_hooked = false;
     let mut a32_hooked = false;
+    let mut dabt_hooked = false;
     let mut search = search_start;
     loop
     {
@@ -268,12 +288,18 @@ pub extern "C" fn main_cold()
                 a32_hooked = true;
             }
         }
+        else if (peek32(search) == 0x92401611)
+        {
+            //poke32(search + 0, 0xd4000002 | (6 << 5)); // el0 dabt/iabt
+            dabt_hooked = true;
+        }
 
-        if (a64_hooked && a32_hooked) { break; }
+        if (a64_hooked && a32_hooked && dabt_hooked) { break; }
         
         search += 4;
     }
     
+    // TODO find a search pattern for these
     poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x280, 0xd4000002); // EL1 IRQ
     poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x280 - 4, 0xd69f03e0); // EL1 IRQ ERET
     poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x480, 0xd4000002); // EL0 IRQ
@@ -281,8 +307,6 @@ pub extern "C" fn main_cold()
     
     //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x584, 0xd4000002); // lowerel serror
     //poke32(ipaddr_to_paddr(KERNEL_START) + 0x800 + 0x784, 0xd4000002); // lowerel serror
-    
-    poke32(ipaddr_to_paddr(KERNEL_START) + 0x4bcc0, 0xd4000002 | (6 << 5)); // el0 dabt/iabt
 
     // Finalize things
     dcache_flush(ipaddr_to_paddr(KERNEL_START), 0x10000000);
@@ -292,6 +316,7 @@ pub extern "C" fn main_cold()
     // Set up guest memory
     let lock = critical_start();
     vttbr_construct();
+    //unsafe { no_hyp_stuff(); }
     
     //hcr_trap_wfe();
     //hcr_trap_wfi();
@@ -300,6 +325,7 @@ pub extern "C" fn main_cold()
     
     println!("translate {:016x} -> {:016x}", KERNEL_START, translate_el1_stage12(KERNEL_START));
     println!("Dropping to EL1");
+    //uart_a.shutdown();
     
     unsafe
     {
@@ -373,6 +399,6 @@ fn on_panic(panic_info: &PanicInfo) -> ! {
     println_unsafe!("{}", panic_info);
 
     timer_wait(4000000);
-    unsafe { t210_reset(); }
+    //unsafe { t210_reset(); }
     loop{}
 }

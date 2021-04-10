@@ -178,6 +178,43 @@ impl UARTDevice
         self.csr_set(UART_BAUD_PULSE_4_14);
     }
     
+    pub fn shutdown(&mut self)
+    {
+        self.interrupt_disable(UART_IE_ALL);
+        self.csr_unset(UART_CSR_ALL);
+        self.uart_lcr |= UART_DLAB_ENABLE;
+        self.uart_thr_dlab.w32(0);
+        self.uart_ier_dlab.w32(0);
+        self.uart_lcr &= !UART_DLAB_ENABLE;
+        self.uart_lcr.w32(0);
+        self.uart_ier_dlab.w32(0);
+        self.uart_iir_fcr.w32(0);
+        
+        timer_wait(8000);
+        
+        self.uart_mcr.write(0);
+        self.uart_msr.write(0);
+        self.uart_irda_csr.write(0);
+        self.uart_rx_fifo_cfg.write(1);
+        self.uart_mie.write(0xf);
+
+        match self.port {
+            UARTDevicePort::UartA => CAR_INFO_UART_A.disable(),
+            UARTDevicePort::UartB => CAR_INFO_UART_B.disable(),
+            UARTDevicePort::UartC => CAR_INFO_UART_C.disable(),
+            UARTDevicePort::UartD => CAR_INFO_UART_D.disable(),
+            UARTDevicePort::UartE => {},
+        }
+        
+        unsafe
+        {
+        PINMUX_AUX_UART1_TX_0.write_volatile(0x74);
+        PINMUX_AUX_UART1_RX_0.write_volatile(0x74);
+        PINMUX_AUX_UART1_RTS_0.write_volatile(0x74);
+        PINMUX_AUX_UART1_CTS_0.write_volatile(0x74);
+        }
+    }
+    
     pub fn set_baudrate(&mut self, baudrate: u32)
     {
         let baudrate_calc: u32 = (((8 * baudrate + 408000000) / (16 * baudrate)));

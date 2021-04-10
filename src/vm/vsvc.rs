@@ -23,6 +23,7 @@ use crate::hos::{hipc::*, hport::HPort, hhandle::HHandle, hclientsession::HClien
 use spin::mutex::Mutex;
 use crate::modules::ipc::{ipc_handle_syncrequest, ipc_hook_namedport};
 use crate::hos::hsvc::hsvc_sleep_thread;
+use crate::io::smmu::smmu_active;
 
 use alloc::boxed::Box;
 use async_trait::async_trait;
@@ -486,7 +487,7 @@ impl SvcHandler for SvcReplyAndReceive
         }*/
         
         /*if get_core() == 3 {
-            pre_ctx = hsvc_sleep_thread(pre_ctx, 1000).await;
+            
         }*/
         
         return pre_ctx;
@@ -538,7 +539,7 @@ impl SvcHandler for SvcGetSystemInfo
 {
     async fn handle(&self, mut pre_ctx: [u64; 32]) -> [u64; 32]
     {
-        let info_type = pre_ctx[1];
+        /*let info_type = pre_ctx[1];
         let info_subtype = pre_ctx[3];
         
         //
@@ -554,8 +555,8 @@ impl SvcHandler for SvcGetSystemInfo
             post_ctx[1] -= 0x4000000;
         }
 
-        return post_ctx;
-        //return pre_ctx;
+        return post_ctx;*/
+        return pre_ctx;
     }
 }
 

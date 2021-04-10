@@ -21,6 +21,7 @@ use crate::vm::funcs::*;
 use crate::task::*;
 use crate::usbd::usbd::*;
 use crate::vm::virq::*;
+use crate::io::smmu::{smmu_print_err, smmu_active};
 
 pub const EC_WFIWFE:        u8 = (0x01);
 pub const EC_ASIMD:         u8 = (0x07);
@@ -190,6 +191,8 @@ pub fn print_context(ctx: &[u64], is_dabt: bool)
     
     println!("----");
     println!("");
+    
+    smmu_print_err();
 }
 
 pub fn print_exception(ec: u8, iss: u32, ctx: &[u64], ret_addr_in: u64) -> u64
@@ -461,9 +464,9 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
             //TODO
             ret_addr = elr_el2;
-            //if (get_core() == 3) {
+            if (get_core() == 3) {
                 ret_addr = vsvc_pre_handle(iss, ctx);
-            //}
+            }
         }
         else if (hvc_num == 2) // SVC post-hook
         {
@@ -472,16 +475,16 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
             //TODO
             ret_addr = elr_el2;
-            //if (get_core() == 3) {
+            if (get_core() == 3) {
                 ret_addr = vsvc_post_handle(iss, ctx);
-            //}
+            }
         }
         else if (hvc_num == 3)
         {
             // emulate ff 42 03 d5     msr        DAIFClr,#0x2
             ctx[32] &= !0x80;
 
-            println!("(core {}) Unsupported SVC A32 hook!!", get_core());
+            //println!("(core {}) Unsupported SVC A32 hook!!", get_core());
             ret_addr = elr_el2;
         }
         else if (hvc_num == 4)
@@ -489,7 +492,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             // emulate df 42 03 d5     msr        DAIFSet,#0x2
             ctx[32] |= 0x80;
 
-            println!("(core {}) Unsupported SVC A32 hook!!", get_core());
+            //println!("(core {}) Unsupported SVC A32 hook!!", get_core());
             ret_addr = elr_el2;
         }
         else if (hvc_num == 5)

@@ -7,6 +7,7 @@
 use core::ops;
 use core::mem;
 use core::str;
+use crate::arm::threading::dsb;
 
 extern "C" {
     pub fn t210_reset();
@@ -163,6 +164,7 @@ pub fn poke32(addr: u64, val: u32) {
     unsafe {
         let mut_reg: *mut u32 = (addr) as _;
         mut_reg.write_volatile(val);
+        asm!("dmb sy");
     }
 }
 
