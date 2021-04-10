@@ -8,7 +8,7 @@ HashtagBlessedII focuses on allowing the extension and debugging of Nintendo's p
 
 * See LICENSE.md for license details
 
-NOTE: Currently only adapted for 8.0.1
+NOTE: Currently only adapted for 8.0.1 and 9.0.1
 
 ## Building
 * Requires `0_kernel_80060000.bin` from PK2
@@ -24,6 +24,7 @@ NOTE: Currently only adapted for 8.0.1
 ## Patches to EL3 Required
 * set EL3 to drop down to EL2 instead of EL1 (A0 78 80 D2 -> 20 79 80 D2)
 * allow HVC (A9 C7 80 52 -> A9 E7 80 52)
+* remove Deja Vu mitigation aborts (TODO: fix the resets in HTB2)
 * any other sigcheck/hashing check stuff
 
 ## Running
