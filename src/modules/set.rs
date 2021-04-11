@@ -5,20 +5,13 @@
  */
 
 use core::{future::Future, pin::Pin};
-use crate::hos::{hport::HPort, hhandle::HHandle, hclientsession::HClientSession, hclientsession::HClientSessionHandler};
-use spin::mutex::Mutex;
-use crate::hos::hipc::{PKT_TYPE_INVALID, PKT_TYPE_LEGACYREQEST, PKT_TYPE_CLOSE, PKT_TYPE_LEGACYCONTROL, PKT_TYPE_REQUEST, PKT_TYPE_CONTROL, PKT_TYPE_REQUESTWITHCONTEXT, PKT_TYPE_CONTROLWITHCONTEXT, DOMAIN_CMD_SEND, DOMAIN_CMD_CLOSEOBJ};
 use crate::hos::hipc::{hipc_get_handle_clientsession, hipc_get_named_serverport, hipc_register_handle_clientsession, hipc_get_packet, hipc_close_handle, hipc_register_domain, hipc_remove_domain, hipc_get_domain_session};
 use alloc::string::String;
-use alloc::sync::Arc;
 use alloc::prelude::v1::Box;
 use crate::task::svc_wait::SvcWait;
 use crate::vm::vsvc::vsvc_get_curpid_name;
-use crate::hos::hdomainobj::HDomainObj;
-use crate::hos::hdomainsession::HDomainSession;
-use crate::modules::ipc::*;
-use crate::hos::hsvc::hsvc_sleep_thread;
-use crate::hos::hipc::{HObject, HObjectExtra, HExtraString};
+use crate::modules::ipc::ipc_register_handler;
+use crate::hos::hipc::{HObject};
 use crate::util::*;
 
 pub fn set_init()
@@ -48,8 +41,8 @@ async fn handle_setsys(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
             
             if let Some(mut desc) = resp.get_static(0)
             {
-                let version = String::from(&desc.read_str_at(0x68));
-                let new_version = String::from("HTB ") + &version;
+                let version = desc.read_str_at(0x68);
+                let new_version = format!("HTB {}", version);
 
                 desc.put_str_at(0x68, new_version);
                 desc.pack();
@@ -59,16 +52,11 @@ async fn handle_setsys(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
         },
         38 => // GetSettingsItemValue
         {
-            let mut setting_id = String::from("");
-            if let Some(desc) = pkt.get_static(0)
-            {
-                setting_id += &desc.read_str();
-                setting_id += "!";
-            }
-            
-            if let Some(desc) = pkt.get_static(1)
-            {
-                setting_id += &desc.read_str();
+            let mut setting_id = format!("");
+            if let Some(desc) = pkt.get_static(0) {
+                if let Some(desc_2) = pkt.get_static(1) {
+                    setting_id = format!("{}!{}", desc.read_str(), desc_2.read_str());
+                }
             }
             
             let recv_desc = pkt.get_recv(0);
@@ -85,15 +73,9 @@ async fn handle_setsys(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
                 if setting_id == "am.debug!force_disable_continuous_recording" {
                     poke8(desc.get_addr_el2(), 1);
                 }
-                /*else if setting_id == "omm!startup_fade_in_ms" {
-                    poke64(desc.get_addr_el2(), 200);
-                }
-                else if setting_id == "omm!startup_fade_out_ms" {
-                    poke64(desc.get_addr_el2(), 400);
-                }
                 else if setting_id == "am.debug!dev_function" {
                     poke8(desc.get_addr_el2(), 1);
-                }*/
+                }
             }
 
             return post_ctx;
