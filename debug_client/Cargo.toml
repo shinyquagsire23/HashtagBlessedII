@@ -8,6 +8,8 @@ edition = "2018"
 
 [dependencies]
 rusb = "0.8"
-ncurses = "5.86.0"
 signal-hook = "0.3.4"
 binread = "2.0.0"
+crossterm = "0.18"
+rand = "0.7"
+tui = { version = "0.14.0", default-features = false, features = ['crossterm'] }

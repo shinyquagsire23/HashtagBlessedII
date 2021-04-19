@@ -349,14 +349,18 @@ async fn blink_task()
         let spin = ["|", "/", "-", "\\"];
         i += 1;
         let spin_idx = (i & 3);
-        print!("{} > {:<80} last {}ns max {}ns  \r", spin[spin_idx], debug_get_cmd_buf(), get_tasking_time(), get_tasking_time_max());
+        //print!("{} > {:<80} last {}ns max {}ns  \r", spin[spin_idx], debug_get_cmd_buf(), get_tasking_time(), get_tasking_time_max());
+        
+        let tasking_time = get_tasking_time().to_le_bytes();
+        
+        log_cmd(&[1, 5, 0xFE, tasking_time[0], tasking_time[1], tasking_time[2], tasking_time[3]]);
         
         // Let debugger know we're on home screen
-        if vsvc_is_qlaunch_started() {
+        /*if vsvc_is_qlaunch_started() {
             log_cmd(&[1, 1, 0xFF]);
-        }
+        }*/
         
-        SleepNs::new(ms_to_ns(200)).await;
+        SleepNs::new(ms_to_ns(80)).await;
     }
 }
 

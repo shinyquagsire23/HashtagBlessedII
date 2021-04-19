@@ -41,12 +41,12 @@ async fn handle_clksession(mut pre_ctx: [u64; 32], hobj: HObject) -> [u64; 32]
     if pkt.get_cmd_id() == 7
     {
         let mut hz = pkt.read_u32(0);
-        println_core!("clkrst::iClkrstSession::SetClockRate(dev_id={:x}, hz={}) from `{}`", dev, hz, vsvc_get_curpid_name());
+        //println_core!("clkrst::iClkrstSession::SetClockRate(dev_id={:x}, hz={}) from `{}`", dev, hz, vsvc_get_curpid_name());
         
         // CPU clocks
         if dev == 0x40000001 {
             hz = 1785 * 1000000;
-            println_core!("clkrst: Overclocking to 1.785GHz!");
+            //println_core!("clkrst: Overclocking to 1.785GHz!");
             pkt.write_u32(0, hz);
         }
 

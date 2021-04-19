@@ -8,5 +8,5 @@ use crate::{UsbCmdPacket, UsbCtx};
 
 pub fn file_cmd_handle(ctx: &mut UsbCtx, pkt: &UsbCmdPacket)
 {
-    println!("File command!");
+    //println!("File command!");
 }

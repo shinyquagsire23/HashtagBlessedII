@@ -147,6 +147,8 @@ pub fn debug_process_cmd()
     {
         println!("Available Commands:");
         println!(" rcm - Reset to RCM mode");
+        println!(" proc - Process commands");
+        println!(" ttbr - Translation table register print");
         println!(" help, ? - Display help");
         println!("")
     }

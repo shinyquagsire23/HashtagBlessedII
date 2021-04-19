@@ -991,7 +991,7 @@ unsafe{
     else if (reg == MC_SMMU_PTB_ASID)
     {
         SMMU_CURRENT_ASID = (val & 0x7F) as u8;
-        println!("(core {}) set ASID {:x}", get_core(), SMMU_CURRENT_ASID);
+        //println!("(core {}) set ASID {:x}", get_core(), SMMU_CURRENT_ASID);
     }
     else if (reg == MC_SMMU_PTC_FLUSH_1)
     {
