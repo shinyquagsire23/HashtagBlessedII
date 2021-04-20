@@ -95,7 +95,7 @@ where
         let log_buf_split = get_log_buf().as_str().lines();
         let text: Vec<Spans> = log_buf_split.map(|a| Spans::from(format!("{}", a))).collect();
         
-        let block_h = (area.height as i32) - 2;
+        let block_h = (area.height as i32) - 3;
         let scroll_max = (text.len() as i32) - block_h;
         let mut scroll_val = scroll_max - app.scroll_up;
         if scroll_val < 0 {
