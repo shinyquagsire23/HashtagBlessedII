@@ -464,9 +464,9 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
             //TODO
             ret_addr = elr_el2;
-            if (get_core() == 3) {
+            //if (get_core() == 3) {
                 ret_addr = vsvc_pre_handle(iss, ctx);
-            }
+            //}
         }
         else if (hvc_num == 2) // SVC post-hook
         {
@@ -475,9 +475,9 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
 
             //TODO
             ret_addr = elr_el2;
-            if (get_core() == 3) {
+            //if (get_core() == 3) {
                 ret_addr = vsvc_post_handle(iss, ctx);
-            }
+            //}
         }
         else if (hvc_num == 3)
         {
@@ -485,7 +485,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             ctx[32] &= !0x80;
 
             //println!("(core {}) Unsupported SVC A32 hook!!", get_core());
-            ret_addr = elr_el2;
+            ret_addr = vsvc_pre_handle_32(iss, ctx);
         }
         else if (hvc_num == 4)
         {
@@ -493,7 +493,7 @@ pub fn handle_exception(which: i32, ctx: &mut [u64]) -> u64
             ctx[32] |= 0x80;
 
             //println!("(core {}) Unsupported SVC A32 hook!!", get_core());
-            ret_addr = elr_el2;
+            ret_addr = vsvc_post_handle_32(iss, ctx);
         }
         else if (hvc_num == 5)
         {

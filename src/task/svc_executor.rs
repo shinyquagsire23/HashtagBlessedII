@@ -14,6 +14,7 @@ use derive_more::Display;
 use alloc::{collections::BTreeMap, sync::Arc, task::Wake, boxed::Box};
 use crossbeam_queue::ArrayQueue;
 use core::option::Option;
+use crate::vm::vsvc::{vsvc_get_curpid, vsvc_get_curpid_name};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Display)]
 pub struct SvcTaskId(pub u64);
@@ -70,9 +71,11 @@ impl SvcExecutor
     pub fn queue(&mut self, task: SvcTask) 
     {
         let task_id = task.id;
+        
         if self.tasks.insert(task.id, task).is_some()
         {
-            //panic!("task with ID {} already exists in task queue", task_id);
+            self.waker_cache.remove(&task_id);
+            println_core!("task with ID {:x} already exists in task queue...from PID {} ({})", task_id.0, vsvc_get_curpid(), vsvc_get_curpid_name());
         }
     }
     
@@ -90,32 +93,53 @@ impl SvcExecutor
             waker_cache,
         } = self;
 
-        let task = match tasks.get_mut(&task_id) 
+        let mut task = match tasks.remove(&task_id)
         {
             Some(task) => task,
             None => return None, // Task no longer exists
         };
+        
+        let waker = match waker_cache.remove(&task_id)
+        {
+            Some(waker) => waker,
+            None => SvcTaskWaker::new(task_id),
+        };
 
+        let mut context = Context::from_waker(&waker);
+        
+        /*let task = match tasks.get_mut(&task_id)
+        {
+            Some(task) => task,
+            None => return None, // Task no longer exists
+        };
+        
         let waker = waker_cache
             .entry(task_id)
             .or_insert_with(|| SvcTaskWaker::new(task_id));
-
-        let mut context = Context::from_waker(waker);
+        
+        let mut context = Context::from_waker(&waker);*/
         match task.poll(&mut context) 
         {
             Poll::Ready(ctx_result) => 
             {
                 // Task is done, remove it and its cached waker
-                tasks.remove(&task_id);
-                waker_cache.remove(&task_id);
-                
+                /*tasks.remove(&task_id);
+                waker_cache.remove(&task_id);*/
+
                 return Some(ctx_result);
             }
             Poll::Pending => 
             {
-                return None
             }
         }
+        
+        if tasks.insert(task_id, task).is_some() {
+            panic!("task with ID {:x} already exists in task queue after pending!", task_id.0);
+        }
+        if waker_cache.insert(task_id, waker).is_some() {
+            panic!("task with ID {:x} already exists in wake cache after pending!", task_id.0);
+        }
+        return None;
     }
 }
 

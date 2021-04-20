@@ -38,6 +38,20 @@ static mut VSVC_SVC_ADDR: [u64; 128] = [0; 128];
 
 include!(concat!(env!("OUT_DIR"), "/vsvc_gen.rs"));
 
+// Key differences for SVC32 vs SVC64:
+// SleepThread, GetThreadCoreMask, SetThreadCoreMask, WaitSynchronization,
+// WaitProcessWideKeyAtomic, GetSystemTick, GetProcessId, GetThreadId, GetInfo, GetDebugFutureThreadInfo,
+// GetResourceLimitLimitValue, GetResourceLimitCurrentValue, WaitForAddress, SignalToAddress,
+// GetResourceLimitPeakValue, ReplyAndReceive, ReplyAndReceiveWithUserBuffer, ControlCodeMemory,
+// ReadWriteRegister, QueryIoMapping, CreateDeviceAddressSpace, MapDeviceAddressSpaceByForce,
+// MapDeviceAddressSpaceAligned, MapDeviceAddressSpace, UnmapDeviceAddressSpace,
+// InvalidateProcessDataCache, StoreProcessDataCache, FlushProcessDataCache,
+// DebugActiveProcess, ContinueDebugEvent, GetProcessList, GetThreadList, 
+// GetDebugThreadContext, SetDebugThreadContext, SetHardwareBreakPoint,
+// GetDebugThreadParam, CreatePort, SetProcessMemoryPermission, MapProcessMemory,
+// UnmapProcessMemory, QueryProcessMemory, MapProcessCodeMemory, UnmapProcessCodeMemory
+// StartProcess, GetProcessInfo, SetResourceLimitLimitValue, CallSecureMonitor
+
 #[async_trait]
 impl SvcHandler for SvcInvalid
 {
@@ -171,30 +185,12 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
     //let svc = HorizonSvc::from_iss(iss);
     let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
     
+    //println_core!("SVC #{} {:x} {:x} from PID {} ({})", iss & 0xFF, peek64(translate_el1_stage12(ctx[18])), peek64(translate_el1_stage12(ctx[18]+8)), vsvc_get_curpid(), vsvc_get_curpid_name());
+    
     unsafe
     {
         VSVC_SVC_ADDR[(iss & 0x7F) as usize] = ctx[11];
     }
-    
-    /*let timeout_stretch = 1;
-    match svc {
-        HorizonSvc::WaitSynchronization(_) => {
-            ctx[3] *= timeout_stretch; // timeout
-        },
-        HorizonSvc::WaitProcessWideKeyAtomic(_) => {
-            ctx[3] *= timeout_stretch; // timeout
-        },
-        HorizonSvc::WaitForAddress(_) => {
-            ctx[3] *= timeout_stretch; // timeout
-        },
-        HorizonSvc::ReplyAndReceive(_) => {
-            ctx[4] *= timeout_stretch; // timeout
-        },
-        HorizonSvc::ReplyAndReceiveWithUserBuffer(_) => {
-            ctx[6] *= timeout_stretch; // timeout
-        },
-        _ => {}
-    }*/
     
     let mut pre_ctx: [u64; 32] = Default::default();
     pre_ctx.copy_from_slice(&ctx[..32]);
@@ -226,6 +222,131 @@ pub fn vsvc_pre_handle(iss: u32, ctx: &mut [u64]) -> u64
 }
 
 pub fn vsvc_post_handle(iss: u32, ctx: &mut [u64]) -> u64
+{
+    let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
+    
+    let errcode = ctx[0] & 0xFFFFFFFF;
+    if (errcode != 0 && errcode != 0xea01 && errcode != 0xec01 && errcode != 0xf601 && (iss & 0xFF) != 0x7F && (iss & 0xFF) != 0x7) {
+        //println!("(core {}) SVC return 0x{:02x} -> {:08x}, pid {:02x} ({})", get_core(), iss & 0xFF, errcode, vsvc_get_curpid(), vsvc_get_curpid_name());
+    }
+    
+    let mut post_ctx: [u64; 32] = Default::default();
+    post_ctx.copy_from_slice(&ctx[..32]);
+    SvcWait::populate_ctx(post_ctx);
+    
+    // async handler is complete
+    if let Some(ret_ctx) = task_advance_svc_ctx(thread_ctx) {
+        for i in 0..32 {
+            ctx[i] = ret_ctx[i];
+        }
+        
+        return ctx[31];
+    }
+    else if SvcWait::is_waiting() // We have another wait
+    {
+        let ret_ctx = SvcWait::get_ctx();
+        for i in 0..32 {
+            ctx[i] = ret_ctx[i];
+        }
+        
+        // emulate ff 42 03 d5     msr        DAIFClr,#0x2
+        ctx[32] &= !0x80;
+        
+        return ctx[31];
+    }
+    else
+    {
+        // No handler, do nothing
+        return ctx[31];
+    }
+}
+
+pub fn vsvc_pre_handle_32(iss: u32, ctx: &mut [u64]) -> u64
+{
+    let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
+    
+    match HorizonSvc::from_iss(iss)
+    {
+        HorizonSvc::SleepThread(_) => { return ctx[31]; },
+        HorizonSvc::GetThreadCoreMask(_) => { return ctx[31]; },
+        HorizonSvc::SetThreadCoreMask(_) => { return ctx[31]; },
+        HorizonSvc::WaitSynchronization(_) => { return ctx[31]; },
+        HorizonSvc::WaitProcessWideKeyAtomic(_) => { return ctx[31]; },
+        HorizonSvc::GetSystemTick(_) => { return ctx[31]; },
+        HorizonSvc::GetProcessId(_) => { return ctx[31]; },
+        HorizonSvc::GetThreadId(_) => { return ctx[31]; },
+        HorizonSvc::GetInfo(_) => { return ctx[31]; },
+        HorizonSvc::GetDebugFutureThreadInfo(_) => { return ctx[31]; },
+        HorizonSvc::GetResourceLimitLimitValue(_) => { return ctx[31]; },
+        HorizonSvc::GetResourceLimitCurrentValue(_) => { return ctx[31]; },
+        HorizonSvc::WaitForAddress(_) => { return ctx[31]; },
+        HorizonSvc::SignalToAddress(_) => { return ctx[31]; },
+        HorizonSvc::GetResourceLimitPeakValue(_) => { return ctx[31]; },
+        HorizonSvc::ReplyAndReceive(_) => { return ctx[31]; },
+        HorizonSvc::ReplyAndReceiveWithUserBuffer(_) => { return ctx[31]; },
+        HorizonSvc::ControlCodeMemory(_) => { return ctx[31]; },
+        HorizonSvc::ReadWriteRegister(_) => { return ctx[31]; },
+        HorizonSvc::QueryIoMapping(_) => { return ctx[31]; },
+        HorizonSvc::CreateDeviceAddressSpace(_) => { return ctx[31]; },
+        HorizonSvc::MapDeviceAddressSpaceByForce(_) => { return ctx[31]; },
+        HorizonSvc::MapDeviceAddressSpaceAligned(_) => { return ctx[31]; },
+        HorizonSvc::MapDeviceAddressSpace(_) => { return ctx[31]; },
+        HorizonSvc::UnmapDeviceAddressSpace(_) => { return ctx[31]; },
+        HorizonSvc::InvalidateProcessDataCache(_) => { return ctx[31]; },
+        HorizonSvc::StoreProcessDataCache(_) => { return ctx[31]; },
+        HorizonSvc::FlushProcessDataCache(_) => { return ctx[31]; },
+        HorizonSvc::DebugActiveProcess(_) => { return ctx[31]; },
+        HorizonSvc::ContinueDebugEvent(_) => { return ctx[31]; },
+        HorizonSvc::GetProcessList(_) => { return ctx[31]; },
+        HorizonSvc::GetThreadList(_) => { return ctx[31]; },
+        HorizonSvc::GetDebugThreadContext(_) => { return ctx[31]; },
+        HorizonSvc::SetDebugThreadContext(_) => { return ctx[31]; },
+        HorizonSvc::SetHardwareBreakPoint(_) => { return ctx[31]; },
+        HorizonSvc::GetDebugThreadParam(_) => { return ctx[31]; },
+        HorizonSvc::CreatePort(_) => { return ctx[31]; },
+        HorizonSvc::SetProcessMemoryPermission(_) => { return ctx[31]; },
+        HorizonSvc::MapProcessMemory(_) => { return ctx[31]; },
+        HorizonSvc::UnmapProcessMemory(_) => { return ctx[31]; },
+        HorizonSvc::QueryProcessMemory(_) => { return ctx[31]; },
+        HorizonSvc::MapProcessCodeMemory(_) => { return ctx[31]; },
+        HorizonSvc::UnmapProcessCodeMemory(_) => { return ctx[31]; },
+        HorizonSvc::StartProcess(_) => { return ctx[31]; },
+        HorizonSvc::GetProcessInfo(_) => { return ctx[31]; },
+        HorizonSvc::SetResourceLimitLimitValue(_) => { return ctx[31]; },
+        HorizonSvc::CallSecureMonitor(_) => { return ctx[31]; },
+        _ => {},
+    }
+       
+    let mut pre_ctx: [u64; 32] = Default::default();
+    pre_ctx.copy_from_slice(&ctx[..32]);
+    if _svc_gen_pre(iss, thread_ctx, pre_ctx) {
+        return ctx[31];
+    }
+    
+    // SVC handler returned early
+    if let Some(ret_ctx) = task_advance_svc_ctx(thread_ctx) {
+        for i in 0..32 {
+            ctx[i] = ret_ctx[i];
+        }
+        
+        return ctx[31];
+    }
+    else
+    {
+        // Otherwise, SVC handler is blocking for Future output
+        
+        let ret_ctx = SvcWait::get_ctx();
+        for i in 0..32 {
+            ctx[i] = ret_ctx[i];
+        }
+        
+        return ctx[31];
+    }
+
+    return ctx[31];
+}
+
+pub fn vsvc_post_handle_32(iss: u32, ctx: &mut [u64]) -> u64
 {
     let thread_ctx = peek64(translate_el1_stage12(ctx[18]));
     

@@ -86,6 +86,7 @@ static ALLOCATOR: HtbHeap = HtbHeap::empty();
 struct PageAlignedHeapAlloc([u8; 0x400000]);
 
 static mut HEAP_RES: PageAlignedHeapAlloc = PageAlignedHeapAlloc([0; 0x400000]);
+static mut HAS_PANICKED: bool = false;
 
 #[no_mangle]
 pub extern "C" fn main_warm(arg: u64) 
@@ -278,8 +279,8 @@ pub extern "C" fn main_cold()
             }
             else if (peek32(search + 4) == 0xd63f0260) // A32
             {
-                //poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
-                //poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
+                poke32(search + 0, 0xd4000002 | (3 << 5)); // HVC #3 instruction
+                poke32(search + 8, 0xd4000002 | (4 << 5)); // HVC #4 instruction
                 a32_hooked = true;
             }
         }
@@ -369,6 +370,10 @@ pub extern "C" fn exception_handle(which: i32, ctx: u64) -> u64
 {
     unsafe
     {
+        if HAS_PANICKED {
+            panic_stall();
+        }
+
         let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
         return handle_exception(which, ctx_slice);
     }
@@ -379,6 +384,10 @@ pub extern "C" fn irq_handle(which: i32, ctx: u64)  -> u64
 {
     unsafe
     {
+        if HAS_PANICKED {
+            panic_stall();
+        }
+
         let mut ctx_slice: &'static mut [u64] = alloc::slice::from_raw_parts_mut(ctx as *mut u64, 0x40);
         return virq_handle(ctx_slice);
     }
@@ -393,11 +402,30 @@ fn on_panic(panic_info: &PanicInfo) -> ! {
     //logger_unsafe_override();
     //log_process();
     
+    unsafe { HAS_PANICKED = true; }
+    
     //println_unsafe!("panic?");
-    println_uarta!("{}", panic_info);
-    println_unsafe!("{}", panic_info);
+    //println_uarta!("(core {}) {}", get_core(), panic_info);
+    println!("(core {}) {}", get_core(), panic_info);
 
-    timer_wait(4000000);
+    for i in 0..1000
+    {
+        timer_wait(4000);
+        let mut gic: GIC = GIC::new();
+        gic.send_interrupt_to_all();
+    }
     //unsafe { t210_reset(); }
-    loop{}
+    return panic_stall();
+}
+
+fn panic_stall() -> !
+{
+    loop
+    {
+        if get_core() == 2
+        {
+            task_advance();
+            irq_usb();
+        }
+    }
 }

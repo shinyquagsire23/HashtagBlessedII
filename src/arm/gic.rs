@@ -670,6 +670,11 @@ impl GIC
         }
     }
     
+    pub fn send_interrupt_to_all(&mut self)
+    {
+        self.gicd.gicd_sgir.w32((1 << 24) | 0);
+    }
+    
     pub fn get_gich_misr(&mut self) -> u32
     {
         self.gich.gich_misr.r32()

@@ -19,6 +19,14 @@ use crate::io::timer::*;
 use spin::Mutex;
 use alloc::collections::vec_deque::VecDeque;
 use crate::vm::vsvc::*;
+use crate::vm::vmmu::ipaddr_to_paddr;
+use crate::util::peek64;
+
+pub const TTB_ENTRY_ATTR_MASK: u64 = 0xFFF0000000000000;
+pub const TTB_ENTRY_ATTR_SHIFT: usize = (52);
+pub const TTB_ENTRY_LOWER_ATTR_MASK: u64 = 0x00000000000007FC;
+pub const TTB_ENTRY_ADDR_MASK: u64 = 0x00007FFFFFFFF800;
+pub const TTB_ENTRY_TYPE_MASK: u64 = 0x0000000000000003;
 
 pub const DEBUG_BULK_PKT_SIZE: u16 = (64);
 
@@ -66,6 +74,128 @@ pub fn debug_get_cmd_buf() -> String
     let lock = debug.cmd_buf.lock();
 
     return lock.clone();
+}
+
+fn debug_print_ttbr(addr: u64, vaddr_base: u64, level: u8) {
+    if addr == 0 || level > 2 {
+        return;
+    }
+    
+    let mut last_upper_attr = 0;
+    let mut last_lower_attr = 0;
+    let mut last_vaddr = 0;
+    let mut last_type = 0;
+    let mut last_print = false;
+    let mut has_printed = false;
+    
+    for i in 0..0x1000/8
+    {
+        let val = peek64(addr + (i*8));
+        let val_next = if i == (0x1000/8)-1 { 0 } else { peek64(addr + ((i+1)*8)) };
+        if val == 0 {
+            continue;
+        }
+        
+        let granularity = match level {
+            0 => 0x40000000,
+            1 => 0x200000,
+            2 => 0x1000,
+            _ => 0x0,
+        };
+        
+        let vaddr = (vaddr_base + (i * granularity));// | 0xffffff8000000000; //TODO: 64-bit vaddrs?
+
+        let val_addr = val & TTB_ENTRY_ADDR_MASK;
+        let val_type = val & TTB_ENTRY_TYPE_MASK;
+        let val_upper_attr = (val & TTB_ENTRY_ATTR_MASK) >> TTB_ENTRY_ATTR_SHIFT;
+        let val_lower_attr = (val & TTB_ENTRY_LOWER_ATTR_MASK) >> 2;
+        let val_ap = (val_lower_attr >> 4) & 3;
+        let val_uxn = (val_upper_attr & 4) != 0;
+        let val_pxn = (val_upper_attr & 2) != 0;
+        
+        let mut should_print = false;
+        let is_table_ent = val_type == 3 && level < 2 && val_upper_attr == 0x80;
+        
+        if last_upper_attr != val_upper_attr
+           || last_lower_attr != val_lower_attr
+           || last_type != val_type
+           || last_vaddr + granularity != vaddr
+        {
+            should_print = true;
+        }
+        
+        last_type = val_type;
+        last_upper_attr = val_upper_attr;
+        last_lower_attr = val_lower_attr;
+        last_vaddr = vaddr;
+        
+        if is_table_ent {
+            should_print = true;
+        }
+        
+        if !should_print && val_next == 0 {
+            should_print = true;
+        }
+        
+        if last_print != should_print && !should_print && has_printed {
+            for i in 0..level {
+                print!("  ");
+            }
+            println!("  ...");
+        }
+        
+        last_print = should_print;
+        
+        if should_print {
+            has_printed = true;
+            for i in 0..level {
+                print!("  ");
+            }
+
+            let uxn_char = if val_uxn { '-' } else { 'X' };
+            let pxn_char = if val_pxn { '-' } else { 'X' };
+            let mut mem_perms = format!("EL0 --{} EL1 --{}", uxn_char, pxn_char);
+            match val_ap {
+                0 => {
+                    mem_perms = format!("EL0 --{} EL1 RW{}", uxn_char, pxn_char);
+                },
+                1 => {
+                    mem_perms = format!("EL0 RW{} EL1 RW{}", uxn_char, pxn_char);
+                },
+                2 => {
+                    mem_perms = format!("EL0 --{} EL1 R-{}", uxn_char, pxn_char);
+                },
+                3 => {
+                    mem_perms = format!("EL0 R-{} EL1 R-{}", uxn_char, pxn_char);
+                },
+                _ => {},
+            }
+
+            match val_type {
+                1 => // Block Entry
+                {
+                    println!("  {:016x} -> addr {:08x} {}", vaddr, val_addr, mem_perms);
+                },
+                3 => // Page Entry or Table Entry
+                {
+                    if is_table_ent {
+                        println!("  {:016x} -> lv{} table addr {:08x}", vaddr, level + 1, val_addr);
+                    }
+                    else {
+                        println!("  {:016x} -> addr {:08x} {}", vaddr, val_addr, mem_perms);
+                    }
+                },
+                _ => {
+                    println!("  {:016x} -> addr {:08x}, type {:x}, upper attr {:x}, lower_attr {:x}", vaddr, val_addr, val_type, val_upper_attr, val_lower_attr);
+                }
+            }
+        }
+        
+        if is_table_ent {
+            debug_print_ttbr(val_addr, vaddr, level + 1);
+        }
+        
+    }
 }
 
 pub fn debug_process_cmd()
@@ -133,11 +263,17 @@ pub fn debug_process_cmd()
         {
             match args[0].parse::<u32>() {
                 Ok(pid) => {
-                    println!("PID {} ({}) TTBR: {:016x}", pid, vsvc_get_pid_name(pid), vsvc_get_pid_ttbr(pid));
+                    let ttbr_addr = vsvc_get_pid_ttbr(pid);
+                    let ttbr_translated = ipaddr_to_paddr(ttbr_addr);
+                    println!("PID {} ({}) TTBR: {:016x} (->{:016x})", pid, vsvc_get_pid_name(pid), ttbr_addr, ttbr_translated);
+                    debug_print_ttbr(ttbr_translated, 0, 0);
                 }
                 Error => {
                     let pid = vsvc_get_process_pid(&args[0]);
-                    println!("PID {} ({}) TTBR: {:016x}", pid, vsvc_get_pid_name(pid), vsvc_get_pid_ttbr(pid));
+                    let ttbr_addr = vsvc_get_pid_ttbr(pid);
+                    let ttbr_translated = ipaddr_to_paddr(ttbr_addr);
+                    println!("PID {} ({}) TTBR: {:016x} (->{:016x})", pid, vsvc_get_pid_name(pid), ttbr_addr, ttbr_translated);
+                    debug_print_ttbr(ttbr_translated, 0, 0);
                 }
             };
             
